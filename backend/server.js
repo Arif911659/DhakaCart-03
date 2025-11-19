@@ -163,9 +163,15 @@ app.post('/api/orders', async (req, res) => {
     // Invalidate products cache
     await redisClient.del('products:all');
 
+    // Convert total_amount to number before sending
+    const orderResponse = {
+      ...orderResult.rows[0],
+      total_amount: parseFloat(orderResult.rows[0].total_amount)
+    };
+
     res.status(201).json({
       message: 'Order placed successfully',
-      order: orderResult.rows[0],
+      order: orderResponse,
     });
   } catch (error) {
     await client.query('ROLLBACK');

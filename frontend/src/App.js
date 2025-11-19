@@ -122,7 +122,12 @@ function App() {
       const result = await response.json();
       
       if (response.ok) {
-        setOrderSuccess(result.order);
+        // Convert total_amount to number
+        const order = {
+          ...result.order,
+          total_amount: parseFloat(result.order.total_amount)
+        };
+        setOrderSuccess(order);
         setCart([]);
         setShowCheckout(false);
         setCustomerInfo({ name: '', email: '', phone: '', address: '' });
