@@ -6,7 +6,7 @@ FROM node:18-alpine AS dependencies
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production && \
+RUN npm install --only=production && \
     npm cache clean --force
 
 # Stage 2: Development
@@ -34,7 +34,7 @@ WORKDIR /app
 
 # Copy dependencies
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .

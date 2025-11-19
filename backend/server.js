@@ -52,11 +52,18 @@ app.get('/api/products', async (req, res) => {
     // If not in cache, fetch from database
     const result = await pool.query('SELECT * FROM products ORDER BY id');
     
+    // Convert numeric strings to actual numbers
+    const products = result.rows.map(product => ({
+      ...product,
+      price: parseFloat(product.price),
+      stock: parseInt(product.stock)
+    }));
+    
     // Store in Redis cache for 5 minutes
-    await redisClient.setEx('products:all', 300, JSON.stringify(result.rows));
+    await redisClient.setEx('products:all', 300, JSON.stringify(products));
     
     console.log('✅ Serving from Database');
-    res.json({ source: 'database', data: result.rows });
+    res.json({ source: 'database', data: products });
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ error: 'Failed to fetch products' });
@@ -81,8 +88,14 @@ app.get('/api/products/:id', async (req, res) => {
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    await redisClient.setEx(cacheKey, 300, JSON.stringify(result.rows[0]));
-    res.json({ source: 'database', data: result.rows[0] });
+    const product = {
+      ...result.rows[0],
+      price: parseFloat(result.rows[0].price),
+      stock: parseInt(result.rows[0].stock)
+    };
+
+    await redisClient.setEx(cacheKey, 300, JSON.stringify(product));
+    res.json({ source: 'database', data: product });
   } catch (error) {
     console.error('Error fetching product:', error);
     res.status(500).json({ error: 'Failed to fetch product' });
@@ -98,7 +111,14 @@ app.get('/api/products/category/:category', async (req, res) => {
       'SELECT * FROM products WHERE category = $1 ORDER BY name',
       [category]
     );
-    res.json({ data: result.rows });
+    
+    const products = result.rows.map(product => ({
+      ...product,
+      price: parseFloat(product.price),
+      stock: parseInt(product.stock)
+    }));
+    
+    res.json({ data: products });
   } catch (error) {
     console.error('Error fetching products by category:', error);
     res.status(500).json({ error: 'Failed to fetch products' });

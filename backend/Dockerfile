@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install dependencies only when needed
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Stage 2: Development
 FROM node:18-alpine AS development

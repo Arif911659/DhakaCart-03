@@ -31,7 +31,13 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/products`);
       const data = await response.json();
-      setProducts(data.data || []);
+      // Convert price strings to numbers
+      const productsWithNumbers = (data.data || []).map(product => ({
+        ...product,
+        price: parseFloat(product.price),
+        stock: parseInt(product.stock)
+      }));
+      setProducts(productsWithNumbers);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -59,7 +65,11 @@ function App() {
           : item
       ));
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, { 
+        ...product, 
+        quantity: 1,
+        price: parseFloat(product.price) // Ensure price is number
+      }]);
     }
   };
 
