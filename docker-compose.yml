@@ -44,6 +44,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: dhakacart-backend:v1.0.0  # Custom image name
     container_name: dhakacart-backend
     environment:
       NODE_ENV: development
@@ -75,6 +76,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: development
+    image: dhakacart-frontend:v1.0.0  # Custom image name
     container_name: dhakacart-frontend
     environment:
       REACT_APP_API_URL: http://localhost:5000/api
