@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
+import Header from './components/Header';
+import ProductList from './components/ProductList';
+import CartSidebar from './components/CartSidebar';
+import CheckoutModal from './components/CheckoutModal';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -12,14 +16,6 @@ function App() {
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
-
-  // Checkout form state
-  const [customerInfo, setCustomerInfo] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: ''
-  });
 
   // Load products and categories
   useEffect(() => {
@@ -57,7 +53,7 @@ function App() {
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.id === product.id);
-    
+
     if (existingItem) {
       setCart(cart.map(item =>
         item.id === product.id
@@ -65,8 +61,8 @@ function App() {
           : item
       ));
     } else {
-      setCart([...cart, { 
-        ...product, 
+      setCart([...cart, {
+        ...product,
         quantity: 1,
         price: parseFloat(product.price) // Ensure price is number
       }]);
@@ -91,9 +87,7 @@ function App() {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  const handleCheckout = async (e) => {
-    e.preventDefault();
-    
+  const handleCheckout = async (customerInfo) => {
     if (cart.length === 0) {
       alert('আপনার কার্ট খালি!');
       return;
@@ -120,7 +114,7 @@ function App() {
       });
 
       const result = await response.json();
-      
+
       if (response.ok) {
         // Convert total_amount to number
         const order = {
@@ -130,7 +124,6 @@ function App() {
         setOrderSuccess(order);
         setCart([]);
         setShowCheckout(false);
-        setCustomerInfo({ name: '', email: '', phone: '', address: '' });
         fetchProducts(); // Refresh products to update stock
       } else {
         alert('অর্ডার করতে সমস্যা হয়েছে!');
@@ -140,10 +133,6 @@ function App() {
       alert('অর্ডার করতে সমস্যা হয়েছে!');
     }
   };
-
-  const filteredProducts = selectedCategory === 'All'
-    ? products
-    : products.filter(p => p.category === selectedCategory);
 
   if (loading) {
     return (
@@ -156,19 +145,7 @@ function App() {
 
   return (
     <div className="App">
-      {/* Header */}
-      <header className="header">
-        <div className="container">
-          <h1>🛒 DhakaCart</h1>
-          <p className="tagline">বাংলাদেশের অনলাইন শপিং</p>
-          <button className="cart-button" onClick={() => setShowCart(!showCart)}>
-            🛒 কার্ট ({cart.length})
-            {cart.length > 0 && (
-              <span className="cart-badge">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
-            )}
-          </button>
-        </div>
-      </header>
+      <Header cart={cart} toggleCart={() => setShowCart(!showCart)} />
 
       {/* Order Success Message */}
       {orderSuccess && (
@@ -182,148 +159,33 @@ function App() {
         </div>
       )}
 
-      {/* Categories Filter */}
-      <div className="categories">
-        <div className="container">
-          {categories.map(category => (
-            <button
-              key={category}
-              className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(category)}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Content */}
       <main className="container">
-        {/* Cart Sidebar */}
         {showCart && (
-          <div className="cart-sidebar">
-            <div className="cart-header">
-              <h2>🛒 আপনার কার্ট</h2>
-              <button onClick={() => setShowCart(false)}>✕</button>
-            </div>
-            
-            {cart.length === 0 ? (
-              <p className="empty-cart">কার্ট খালি</p>
-            ) : (
-              <>
-                <div className="cart-items">
-                  {cart.map(item => (
-                    <div key={item.id} className="cart-item">
-                      <img src={item.image_url} alt={item.name} />
-                      <div className="cart-item-info">
-                        <h4>{item.name}</h4>
-                        <p>৳{item.price.toFixed(2)}</p>
-                        <div className="quantity-controls">
-                          <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
-                          <span>{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
-                        </div>
-                      </div>
-                      <button className="remove-btn" onClick={() => removeFromCart(item.id)}>🗑️</button>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="cart-footer">
-                  <div className="cart-total">
-                    <strong>মোট:</strong>
-                    <strong>৳{getTotalAmount().toFixed(2)}</strong>
-                  </div>
-                  <button className="checkout-btn" onClick={() => setShowCheckout(true)}>
-                    চেকআউট করুন
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          <CartSidebar
+            cart={cart}
+            onClose={() => setShowCart(false)}
+            removeFromCart={removeFromCart}
+            updateQuantity={updateQuantity}
+            onCheckout={() => setShowCheckout(true)}
+          />
         )}
 
-        {/* Checkout Modal */}
         {showCheckout && (
-          <div className="modal-overlay" onClick={() => setShowCheckout(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>চেকআউট</h2>
-              <form onSubmit={handleCheckout}>
-                <input
-                  type="text"
-                  placeholder="আপনার নাম"
-                  value={customerInfo.name}
-                  onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                  required
-                />
-                <input
-                  type="email"
-                  placeholder="ইমেইল"
-                  value={customerInfo.email}
-                  onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                  required
-                />
-                <input
-                  type="tel"
-                  placeholder="ফোন নম্বর"
-                  value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                  required
-                />
-                <textarea
-                  placeholder="ডেলিভারি ঠিকানা"
-                  value={customerInfo.address}
-                  onChange={(e) => setCustomerInfo({...customerInfo, address: e.target.value})}
-                  required
-                  rows="3"
-                />
-                
-                <div className="order-summary">
-                  <h3>অর্ডার সামারি:</h3>
-                  {cart.map(item => (
-                    <div key={item.id} className="summary-item">
-                      <span>{item.name} (x{item.quantity})</span>
-                      <span>৳{(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div className="summary-total">
-                    <strong>মোট:</strong>
-                    <strong>৳{getTotalAmount().toFixed(2)}</strong>
-                  </div>
-                </div>
-
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowCheckout(false)}>বাতিল</button>
-                  <button type="submit" className="submit-btn">অর্ডার নিশ্চিত করুন</button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <CheckoutModal
+            onClose={() => setShowCheckout(false)}
+            cart={cart}
+            totalAmount={getTotalAmount()}
+            onSubmit={handleCheckout}
+          />
         )}
 
-        {/* Products Grid */}
-        <div className="products-grid">
-          {filteredProducts.map(product => (
-            <div key={product.id} className="product-card">
-              <img src={product.image_url} alt={product.name} />
-              <div className="product-info">
-                <h3>{product.name}</h3>
-                <p className="product-description">{product.description}</p>
-                <div className="product-footer">
-                  <span className="price">৳{product.price.toFixed(2)}</span>
-                  <span className="stock">স্টক: {product.stock}</span>
-                </div>
-                <button
-                  className="add-to-cart-btn"
-                  onClick={() => addToCart(product)}
-                  disabled={product.stock === 0}
-                >
-                  {product.stock > 0 ? 'কার্টে যোগ করুন' : 'স্টক নেই'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ProductList
+          products={products}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          addToCart={addToCart}
+        />
       </main>
 
       {/* Footer */}
