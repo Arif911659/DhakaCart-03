@@ -14,4 +14,5 @@ data:
   REDIS_PORT: "6379"
   
   # Frontend configuration
-  REACT_APP_API_URL: "http://api.dhakacart.com/api"
+  # Pointing to the external IP of the server where port-forwarding is active
+  REACT_APP_API_URL: "http://172.19.218.171:5000/api"
