@@ -15,7 +15,8 @@ const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   user: process.env.DB_USER || 'dhakacart',
-  password: process.env.DB_PASSWORD || 'dhakacart123',
+  // Use environment variable only for password (no hardcoded default)
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'dhakacart_db',
   max: 20,
   idleTimeoutMillis: 30000,
