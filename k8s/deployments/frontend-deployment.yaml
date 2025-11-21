@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dhakacart-frontend
+  namespace: dhakacart
+  labels:
+    app: dhakacart-frontend
+    tier: frontend
+spec:
+  replicas: 2  # Scale based on traffic
+  selector:
+    matchLabels:
+      app: dhakacart-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: dhakacart-frontend
+        tier: frontend
+        version: v1.0.0
+    spec:
+      containers:
+      - name: frontend
+        image: arifhossaincse22/dhakacart-frontend:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: REACT_APP_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: dhakacart-config
+              key: REACT_APP_API_URL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
