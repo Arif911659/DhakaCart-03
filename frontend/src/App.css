@@ -105,6 +105,15 @@ body {
   animation: slideDown 0.3s ease-out;
 }
 
+/* Error Banner */
+.error-banner {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5253 100%);
+  color: white;
+  padding: 20px 0;
+  text-align: center;
+  animation: slideDown 0.3s ease-out;
+}
+
 @keyframes slideDown {
   from { transform: translateY(-100%); }
   to { transform: translateY(0); }
@@ -113,6 +122,17 @@ body {
 .success-banner button {
   background: white;
   color: #20bf6b;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 20px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.error-banner button {
+  background: white;
+  color: #ee5253;
   border: none;
   padding: 8px 20px;
   border-radius: 20px;
@@ -422,6 +442,15 @@ main {
   border-radius: 6px;
   font-size: 1rem;
   font-family: inherit;
+}
+
+.form-error {
+  background: #ffe3e3;
+  color: #c0392b;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  font-size: 0.9rem;
 }
 
 .modal input:focus,

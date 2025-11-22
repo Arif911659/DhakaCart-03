@@ -16,6 +16,8 @@ function App() {
   const [showCart, setShowCart] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
+  const [error, setError] = useState(null);
+  const [checkoutError, setCheckoutError] = useState(null);
 
   // Load products and categories
   useEffect(() => {
@@ -25,18 +27,23 @@ function App() {
 
   const fetchProducts = async () => {
     try {
+      setError(null);
       const response = await fetch(`${API_URL}/products`);
+      if (!response.ok) {
+        throw new Error('Failed to load products');
+      }
       const data = await response.json();
       // Convert price strings to numbers
       const productsWithNumbers = (data.data || []).map(product => ({
         ...product,
         price: parseFloat(product.price),
-        stock: parseInt(product.stock)
+        stock: parseInt(product.stock, 10)
       }));
       setProducts(productsWithNumbers);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setError('পণ্য লোড করতে সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।');
       setLoading(false);
     }
   };
@@ -44,20 +51,35 @@ function App() {
   const fetchCategories = async () => {
     try {
       const response = await fetch(`${API_URL}/categories`);
+      if (!response.ok) {
+        throw new Error('Failed to load categories');
+      }
       const data = await response.json();
       setCategories(['All', ...(data.data || [])]);
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setError(prev => prev || 'ক্যাটাগরি লোড করতে সমস্যা হয়েছে।');
     }
   };
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.id === product.id);
 
+    // If product has no stock, show error
+    if (product.stock <= 0) {
+      setError(`দুঃখিত, "${product.name}" এর স্টক নেই।`);
+      return;
+    }
+
     if (existingItem) {
+      if (existingItem.quantity >= existingItem.stock) {
+        setError(`দুঃখিত, "${product.name}" এর স্টক মাত্র ${existingItem.stock} টি।`);
+        return;
+      }
+
       setCart(cart.map(item =>
         item.id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, quantity: Math.min(item.quantity + 1, item.stock) }
           : item
       ));
     } else {
@@ -74,10 +96,19 @@ function App() {
   };
 
   const updateQuantity = (productId, newQuantity) => {
+    const itemInCart = cart.find(item => item.id === productId);
+    if (!itemInCart) return;
+
     if (newQuantity <= 0) {
       removeFromCart(productId);
       return;
     }
+
+    if (newQuantity > itemInCart.stock) {
+      setError(`দুঃখিত, "${itemInCart.name}" এর স্টক মাত্র ${itemInCart.stock} টি।`);
+      newQuantity = itemInCart.stock;
+    }
+
     setCart(cart.map(item =>
       item.id === productId ? { ...item, quantity: newQuantity } : item
     ));
@@ -89,9 +120,12 @@ function App() {
 
   const handleCheckout = async (customerInfo) => {
     if (cart.length === 0) {
-      alert('আপনার কার্ট খালি!');
+      setCheckoutError('আপনার কার্ট খালি!');
       return;
     }
+
+    setCheckoutError(null);
+    setError(null);
 
     try {
       const orderData = {
@@ -124,13 +158,21 @@ function App() {
         setOrderSuccess(order);
         setCart([]);
         setShowCheckout(false);
+        setCheckoutError(null);
         fetchProducts(); // Refresh products to update stock
       } else {
-        alert('অর্ডার করতে সমস্যা হয়েছে!');
+        let message = 'অর্ডার করতে সমস্যা হয়েছে!';
+        if (result && result.error) {
+          message = result.error;
+          if (Array.isArray(result.details) && result.details.length > 0) {
+            message += ' ' + result.details.join(' | ');
+          }
+        }
+        setCheckoutError(message);
       }
     } catch (error) {
       console.error('Error placing order:', error);
-      alert('অর্ডার করতে সমস্যা হয়েছে!');
+      setCheckoutError('অর্ডার করতে সমস্যা হয়েছে! পরে আবার চেষ্টা করুন।');
     }
   };
 
@@ -159,6 +201,17 @@ function App() {
         </div>
       )}
 
+      {/* Global Error Banner */}
+      {error && (
+        <div className="error-banner">
+          <div className="container">
+            <h3>⚠️ একটি সমস্যা হয়েছে</h3>
+            <p>{error}</p>
+            <button onClick={() => setError(null)}>বন্ধ করুন</button>
+          </div>
+        </div>
+      )}
+
       <main className="container">
         {showCart && (
           <CartSidebar
@@ -166,16 +219,23 @@ function App() {
             onClose={() => setShowCart(false)}
             removeFromCart={removeFromCart}
             updateQuantity={updateQuantity}
-            onCheckout={() => setShowCheckout(true)}
+            onCheckout={() => {
+              setCheckoutError(null);
+              setShowCheckout(true);
+            }}
           />
         )}
 
         {showCheckout && (
           <CheckoutModal
-            onClose={() => setShowCheckout(false)}
+            onClose={() => {
+              setShowCheckout(false);
+              setCheckoutError(null);
+            }}
             cart={cart}
             totalAmount={getTotalAmount()}
             onSubmit={handleCheckout}
+            error={checkoutError}
           />
         )}
 

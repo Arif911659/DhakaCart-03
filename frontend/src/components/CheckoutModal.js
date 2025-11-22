@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function CheckoutModal({ onClose, cart, totalAmount, onSubmit }) {
+function CheckoutModal({ onClose, cart, totalAmount, onSubmit, error }) {
     const [customerInfo, setCustomerInfo] = useState({
         name: '',
         email: '',
@@ -17,6 +17,11 @@ function CheckoutModal({ onClose, cart, totalAmount, onSubmit }) {
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <h2>চেকআউট</h2>
+                {error && (
+                    <div className="form-error">
+                        <p>{error}</p>
+                    </div>
+                )}
                 <form onSubmit={handleSubmit}>
                     <input
                         type="text"
