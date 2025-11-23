@@ -1,0 +1,85 @@
+# Grafana Loki Configuration
+# Centralized log aggregation for DhakaCart
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+# Data ingestion settings
+ingester:
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+  chunk_idle_period: 1h       # Flush chunks after 1 hour idle
+  max_chunk_age: 1h           # Flush chunks after 1 hour
+  chunk_target_size: 1048576  # Target chunk size 1MB
+  chunk_retain_period: 30s    # Keep chunks for 30s
+  max_transfer_retries: 0     # Disable chunk transfers
+
+# Schema configuration
+schema_config:
+  configs:
+    - from: 2023-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
+
+# Storage configuration
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/boltdb-shipper-active
+    cache_location: /loki/boltdb-shipper-cache
+    cache_ttl: 24h
+    shared_store: filesystem
+  filesystem:
+    directory: /loki/chunks
+
+# Compactor for cleaning old data
+compactor:
+  working_directory: /loki/boltdb-shipper-compactor
+  shared_store: filesystem
+
+# Data retention (delete logs older than this)
+limits_config:
+  retention_period: 744h  # 31 days
+  enforce_metric_name: false
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h  # 1 week
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+  max_label_name_length: 1024
+  max_label_value_length: 2048
+  max_label_names_per_series: 30
+
+# Query configuration
+chunk_store_config:
+  max_look_back_period: 0s
+
+# Table manager for retention
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 744h  # 31 days
+
+# Ruler for alerts
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
