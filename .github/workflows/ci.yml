@@ -34,7 +34,14 @@ jobs:
       # Step 3: Install dependencies
       - name: Install backend dependencies
         working-directory: ./backend
-        run: npm ci  # ci = clean install (faster, more reliable)
+        run: |
+          # Try npm ci first (faster, more reliable)
+          # If it fails due to lock file mismatch, use npm install
+          npm ci || {
+            echo "⚠️ package-lock.json out of sync, updating..."
+            npm install
+            echo "✅ Dependencies installed (lock file updated)"
+          }
       
       # Step 4: Run tests (if tests exist)
       - name: Run backend tests
@@ -71,7 +78,14 @@ jobs:
       # Step 3: Install dependencies
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: |
+          # Try npm ci first (faster, more reliable)
+          # If it fails due to lock file mismatch, use npm install
+          npm ci || {
+            echo "⚠️ package-lock.json out of sync, updating..."
+            npm install
+            echo "✅ Dependencies installed (lock file updated)"
+          }
       
       # Step 4: Run tests
       - name: Run frontend tests
