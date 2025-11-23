@@ -304,3 +304,126 @@ Anyone can now deploy DhakaCart with a single command:
 ```bash
 docker-compose -f docker-compose.prod.yml up -d
 ```
+============================================================
+
+
+লোকালে পরীক্ষা করি। `docker-compose.yml` আপডেট করছি যাতে nginx proxy সঠিকভাবে কাজ করে:
+
+
+[4 tools called]
+
+
+লোকালে পরীক্ষার জন্য `docker-compose.yml` আপডেট করছি:
+
+
+[3 tools called]
+
+
+লোকালে পরীক্ষার জন্য সব ঠিক করা হয়েছে। এখন test করুন:
+
+## যা করা হয়েছে
+
+1. `docker-compose.yml` আপডেট — Production build (Nginx) ব্যবহার করবে
+2. `nginx.conf` ঠিক করা — `backend:5000` (Docker network) ব্যবহার করবে
+3. `App.js` আপডেট — Relative URL (`/api`) support
+
+---
+
+## লোকালে Test করার Steps
+
+### Step 1: Existing Containers Stop করুন
+
+```bash
+cd /home/arif/DhakaCart-03
+docker-compose down
+```
+
+### Step 2: Rebuild করুন (Production Frontend)
+
+```bash
+# Frontend production build করবে (Nginx সহ)
+docker-compose build
+
+# সব services start করুন
+docker-compose up -d
+```
+
+### Step 3: Logs দেখুন
+
+```bash
+docker-compose logs -f
+```
+
+30-60 সেকেন্ড অপেক্ষা করুন services ready হতে।
+
+### Step 4: Browser-এ Test করুন
+
+```
+http://localhost:3000
+```
+
+Expected: Products load হবে, no error.
+
+---
+
+## Verify Nginx Proxy কাজ করছে
+
+```bash
+# Direct backend test
+curl http://localhost:5000/api/products
+
+# Through Nginx proxy (এইটা কাজ করলে perfect!)
+curl http://localhost:3000/api/products
+```
+
+দ্বিতীয় command কাজ করলে Nginx proxy ঠিক আছে।
+
+---
+
+## Quick Test Commands
+
+```bash
+# Check containers
+docker-compose ps
+
+# Check logs
+docker-compose logs frontend
+docker-compose logs backend
+
+# Test API
+curl http://localhost:3000/api/products
+```
+
+---
+
+## যদি Error দেখেন
+
+```bash
+# Rebuild frontend
+docker-compose build frontend
+docker-compose up -d frontend
+
+# Check logs
+docker-compose logs frontend
+```
+
+---
+
+## Summary
+
+- `docker-compose.yml` আপডেট করা হয়েছে
+- Production build (Nginx) ব্যবহার করবে
+- Relative URL (`/api`) ব্যবহার করবে
+- সব Docker network-এ চলবে
+
+এখন test করুন:
+
+```bash
+docker-compose down
+docker-compose build
+docker-compose up -d
+```
+
+তারপর `http://localhost:3000` open করুন।
+
+See `LOCAL_TESTING_GUIDE.md` for detailed instructions.

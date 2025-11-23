@@ -5,7 +5,11 @@ import ProductList from './components/ProductList';
 import CartSidebar from './components/CartSidebar';
 import CheckoutModal from './components/CheckoutModal';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Use relative URL if REACT_APP_API_URL starts with /, otherwise use full URL
+const API_URL_BASE = process.env.REACT_APP_API_URL || '/api';
+const API_URL = API_URL_BASE.startsWith('/') 
+  ? API_URL_BASE  // Relative URL - Nginx will proxy
+  : (process.env.REACT_APP_API_URL || 'http://localhost:5000/api');  // Full URL for development
 
 function App() {
   const [products, setProducts] = useState([]);
