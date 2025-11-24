@@ -53,12 +53,17 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hub/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["ubuntu/images/*/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
   }
 }
 
@@ -333,11 +338,17 @@ resource "aws_iam_role" "k8s_node" {
       }
     ]
   })
+
+  # Disable tags to avoid iam:TagRole permission requirement
+  tags = {}
 }
 
 resource "aws_iam_instance_profile" "k8s_node" {
   name = "${var.cluster_name}-node-profile"
   role = aws_iam_role.k8s_node.name
+
+  # Disable tags to avoid iam:TagRole permission requirement
+  tags = {}
 }
 
 resource "aws_iam_role_policy_attachment" "k8s_node_ec2" {
