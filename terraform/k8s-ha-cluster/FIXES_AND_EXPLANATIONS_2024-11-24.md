@@ -139,6 +139,106 @@ master1_private_ip = module.master_nodes[0].private_ip
 
 ---
 
+### সমস্যা ৬: Security Groups Circular Dependency Error ❌
+
+**Location:** `modules/security-groups/main.tf`
+
+**Problem:**
+```terraform
+# Master Security Group
+resource "aws_security_group" "master" {
+  ingress {
+    security_groups = [aws_security_group.worker.id]  # ❌ Worker reference
+  }
+}
+
+# Worker Security Group
+resource "aws_security_group" "worker" {
+  ingress {
+    security_groups = [aws_security_group.master.id]  # ❌ Master reference
+  }
+}
+```
+
+**Error Message:**
+```
+Error: Cycle: module.security_groups.aws_security_group.worker, 
+              module.security_groups.aws_security_group.master
+```
+
+**কেন সমস্যা:**
+- Master security group worker security group এর ID reference করছে
+- Worker security group master security group এর ID reference করছে
+- Terraform dependency resolver confused হয়ে যায়
+- কোনটা আগে create করবে বুঝতে পারে না
+
+**Impact:**
+- `terraform plan` command fail হবে
+- Infrastructure deploy করা যাবে না
+- Cluster setup শুরুই করা যাবে না
+
+---
+
+### সমস্যা ৭: Template File Variable Error ❌
+
+**Location:** `cloud-init/bastion.yaml` line 42
+
+**Problem:**
+```yaml
+ssh -i ~/.ssh/${CLUSTER_NAME}-key.pem ubuntu@...
+# ❌ Terraform thinks ${CLUSTER_NAME} is a template variable
+```
+
+**Error Message:**
+```
+Error: Invalid value for "vars" parameter: vars map does not contain key
+"CLUSTER_NAME", referenced at ./cloud-init/bastion.yaml:42,23-35.
+```
+
+**কেন সমস্যা:**
+- `bastion.yaml` file এ `${CLUSTER_NAME}` bash variable হিসেবে ব্যবহার করা হয়েছে
+- কিন্তু Terraform `templatefile()` function সব `${...}` pattern template variable মনে করে
+- `CLUSTER_NAME` variable template এ pass করা হয়নি
+
+**Impact:**
+- Template file process করা যাবে না
+- Bastion host user_data generate হবে না
+- Bastion instance create হবে না
+
+---
+
+### সমস্যা ৮: Invalid Self Reference in Outputs ❌
+
+**Location:** `outputs.tf` lines 109, 115, 121, 123
+
+**Problem:**
+```terraform
+output "next_steps" {
+  value = <<-EOT
+    ${self.bastion_ssh_command.value}  # ❌ Invalid
+    ${self.kubeconfig_command.value}   # ❌ Invalid
+  EOT
+}
+```
+
+**Error Message:**
+```
+Error: Invalid "self" reference
+The "self" object is not available in this context.
+```
+
+**কেন সমস্যা:**
+- `self` object শুধুমাত্র resource provisioner, connection, এবং postcondition blocks এ available
+- Output blocks এ `self` ব্যবহার করা যায় না
+- Other outputs reference করতে হলে direct module/variable reference করতে হবে
+
+**Impact:**
+- Outputs generate হবে না
+- Deployment information display হবে না
+- User confusion হতে পারে
+
+---
+
 ## Fixes Applied
 
 ### Fix ১: Load Balancer Module - Conditional Security Groups ✅
@@ -498,6 +598,149 @@ user_data = base64encode(templatefile("...", {
 
 ---
 
+### Fix ১১: Security Groups Circular Dependency - Separate Rules ✅
+
+**File:** `modules/security-groups/main.tf`
+
+**Before:**
+```terraform
+# Master Security Group
+resource "aws_security_group" "master" {
+  ingress {
+    security_groups = [aws_security_group.worker.id]  # ❌ Circular
+  }
+}
+
+# Worker Security Group  
+resource "aws_security_group" "worker" {
+  ingress {
+    security_groups = [aws_security_group.master.id]  # ❌ Circular
+  }
+}
+```
+
+**After:**
+```terraform
+# Master Security Group (no worker reference)
+resource "aws_security_group" "master" {
+  # Only self and bastion references
+  ingress {
+    security_groups = [aws_security_group.bastion.id]  # ✅ OK
+  }
+}
+
+# Worker Security Group (no master reference)
+resource "aws_security_group" "worker" {
+  # Only self and bastion references
+  ingress {
+    security_groups = [aws_security_group.bastion.id]  # ✅ OK
+  }
+}
+
+# Separate rules added AFTER both groups created
+resource "aws_security_group_rule" "master_api_from_workers" {
+  type                     = "ingress"
+  source_security_group_id = aws_security_group.worker.id
+  security_group_id        = aws_security_group.master.id
+  # ... port details ...
+}
+
+resource "aws_security_group_rule" "worker_kubelet_from_masters" {
+  type                     = "ingress"
+  source_security_group_id = aws_security_group.master.id
+  security_group_id        = aws_security_group.worker.id
+  # ... port details ...
+}
+```
+
+**কেন এই Fix:**
+- Security groups প্রথমে create হয় (no circular references)
+- তারপর separate `aws_security_group_rule` resources দিয়ে cross-references add করা হয়
+- Terraform dependency resolver এখন proper order বুঝতে পারে
+
+**Technical Reasoning:**
+- `aws_security_group_rule` separate resource, main group create হওয়ার পর add করা যায়
+- This breaks the circular dependency
+- Same functionality, different implementation
+- AWS API supports both inline rules and separate rule resources
+
+**Steps:**
+1. Master SG create (only references bastion)
+2. Worker SG create (only references bastion)
+3. Separate rules add (master ↔ worker communication)
+
+---
+
+### Fix ১২: Template File Variable Escaping ✅
+
+**File:** `cloud-init/bastion.yaml`
+
+**Before:**
+```yaml
+ssh -i ~/.ssh/${CLUSTER_NAME}-key.pem ubuntu@...
+# ❌ Terraform tries to interpret ${CLUSTER_NAME} as template variable
+```
+
+**After:**
+```yaml
+ssh -i ~/.ssh/$${CLUSTER_NAME}-key.pem ubuntu@...
+# ✅ Double $$ escapes to single $ in Terraform template
+```
+
+**কেন এই Fix:**
+- `$$` Terraform template এ single `$` এ convert হয়
+- `${CLUSTER_NAME}` এখন bash variable হিসেবে treat হবে
+- Template processing এর সময় substitution হবে না
+
+**Technical Reasoning:**
+- Terraform `templatefile()` function `${...}` pattern খুঁজে template variable মনে করে
+- `$$` escape sequence হিসেবে কাজ করে
+- Final output এ single `$` থাকবে, যা bash interpret করবে
+
+**Example:**
+- Template: `$${CLUSTER_NAME}` 
+- After Terraform: `${CLUSTER_NAME}`
+- After bash: Actual cluster name value
+
+---
+
+### Fix ১৩: Output Self Reference Fixed ✅
+
+**File:** `outputs.tf`
+
+**Before:**
+```terraform
+output "next_steps" {
+  value = <<-EOT
+    ${self.bastion_ssh_command.value}  # ❌ Invalid
+    ${self.api_server_endpoint.value}  # ❌ Invalid
+  EOT
+}
+```
+
+**After:**
+```terraform
+output "next_steps" {
+  value = <<-EOT
+    ssh -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}  # ✅ Direct reference
+    ${module.api_lb.dns_name}:6443  # ✅ Direct reference
+  EOT
+}
+```
+
+**কেন এই Fix:**
+- `self` object output blocks এ available নয়
+- Direct module/variable references ব্যবহার করা হয়েছে
+- Same information, different way
+
+**Technical Reasoning:**
+- Output blocks এ other outputs reference করতে হলে direct path use করতে হবে
+- Module outputs: `module.<name>.<output>`
+- Variables: `var.<name>`
+- Resources: `resource.<type>.<name>.<attribute>`
+
+---
+
 ## Technical Explanations
 
 ### কেন Network Load Balancer Security Groups Support করে না?
@@ -614,7 +857,9 @@ user_data = base64encode(templatefile("...", {
 3. ✅ `cloud-init/master-init.yaml` - SSH key injection
 4. ✅ `cloud-init/master-join.yaml` - SSH key injection, improved join logic
 5. ✅ `cloud-init/worker-join.yaml` - SSH key injection, fallback mechanism
-6. ✅ `outputs.tf` - Updated master nodes output
+6. ✅ `cloud-init/bastion.yaml` - Template variable escaping
+7. ✅ `modules/security-groups/main.tf` - Circular dependency fix with separate rules
+8. ✅ `outputs.tf` - Updated master nodes output, fixed self references
 
 ### Verification Commands:
 ```bash
@@ -642,20 +887,25 @@ grep -n "depends_on" main.tf
 
 ## Summary
 
-### Problems Fixed: 5
+### Problems Fixed: 8
 1. ✅ Network Load Balancer security groups issue
 2. ✅ SSH key missing in master-join.yaml
 3. ✅ SSH key missing in worker-join.yaml
 4. ✅ Load balancer module design issue
-5. ✅ Circular dependency risk
+5. ✅ Circular dependency risk (master nodes)
+6. ✅ Security groups circular dependency error
+7. ✅ Template file variable error
+8. ✅ Invalid self reference in outputs
 
-### Files Modified: 6
+### Files Modified: 8
 1. `modules/load-balancer/main.tf`
 2. `main.tf`
 3. `cloud-init/master-init.yaml`
 4. `cloud-init/master-join.yaml`
 5. `cloud-init/worker-join.yaml`
-6. `outputs.tf`
+6. `cloud-init/bastion.yaml` (new)
+7. `modules/security-groups/main.tf` (new)
+8. `outputs.tf`
 
 ### Best Practices Applied: 5
 1. Infrastructure as Code
@@ -705,7 +955,27 @@ grep -n "depends_on" main.tf
 ---
 
 **Created:** ২৪ নভেম্বর, ২০২৪  
-**Last Updated:** ২৪ নভেম্বর, ২০২৪  
+**Last Updated:** ২৪ নভেম্বর, ২০২৪ (Circular Dependency Fix)  
 **Author:** DevOps Automation  
 **Project:** DhakaCart HA Kubernetes Cluster
+
+---
+
+## Latest Update (২৪ নভেম্বর, ২০২৪)
+
+### নতুন Fix: Security Groups Circular Dependency
+
+**সমস্যা:** `terraform plan` command fail হচ্ছিল circular dependency error দিয়ে:
+```
+Error: Cycle: module.security_groups.aws_security_group.worker, 
+              module.security_groups.aws_security_group.master
+```
+
+**সমাধান:**
+- Master এবং Worker security groups এর inline ingress rules থেকে cross-references remove করা হয়েছে
+- Separate `aws_security_group_rule` resources যোগ করা হয়েছে circular dependency break করার জন্য
+- Template file variable escaping (`$$` instead of `$`)
+- Output self references fix করা হয়েছে
+
+**Result:** ✅ `terraform plan` এখন successfully run হচ্ছে!
 

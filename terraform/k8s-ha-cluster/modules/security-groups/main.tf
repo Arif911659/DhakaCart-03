@@ -33,15 +33,6 @@ resource "aws_security_group" "master" {
   description = "Security group for Kubernetes master nodes"
   vpc_id      = var.vpc_id
 
-  # Kubernetes API Server
-  ingress {
-    description     = "Kubernetes API Server from workers and bastion"
-    from_port       = 6443
-    to_port         = 6443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.worker.id, aws_security_group.bastion.id]
-  }
-
   # etcd client API
   ingress {
     description = "etcd client API from masters"
@@ -58,15 +49,6 @@ resource "aws_security_group" "master" {
     to_port     = 2380
     protocol    = "tcp"
     self        = true
-  }
-
-  # Kubelet API
-  ingress {
-    description     = "Kubelet API from workers and bastion"
-    from_port       = 10250
-    to_port         = 10250
-    protocol        = "tcp"
-    security_groups = [aws_security_group.worker.id, aws_security_group.bastion.id]
   }
 
   # kube-scheduler
@@ -96,6 +78,24 @@ resource "aws_security_group" "master" {
     self        = true
   }
 
+  # Kubernetes API Server from bastion (non-circular)
+  ingress {
+    description     = "Kubernetes API Server from bastion"
+    from_port       = 6443
+    to_port         = 6443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  # Kubelet API from bastion (non-circular)
+  ingress {
+    description     = "Kubelet API from bastion"
+    from_port       = 10250
+    to_port         = 10250
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -115,13 +115,13 @@ resource "aws_security_group" "worker" {
   description = "Security group for Kubernetes worker nodes"
   vpc_id      = var.vpc_id
 
-  # Kubelet API
+  # Kubelet API from bastion (non-circular)
   ingress {
-    description     = "Kubelet API from masters and bastion"
+    description     = "Kubelet API from bastion"
     from_port       = 10250
     to_port         = 10250
     protocol        = "tcp"
-    security_groups = [aws_security_group.master.id, aws_security_group.bastion.id]
+    security_groups = [aws_security_group.bastion.id]
   }
 
   # NodePort Services
@@ -140,15 +140,6 @@ resource "aws_security_group" "worker" {
     to_port     = 0
     protocol    = "-1"
     self        = true
-  }
-
-  # Allow traffic from masters (for networking)
-  ingress {
-    description     = "All traffic from masters"
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    security_groups = [aws_security_group.master.id]
   }
 
   egress {
@@ -170,12 +161,13 @@ resource "aws_security_group" "api_lb" {
   description = "Security group for internal API Load Balancer"
   vpc_id      = var.vpc_id
 
+  # Kubernetes API Server from bastion and master (non-circular)
   ingress {
-    description     = "Kubernetes API Server from workers and bastion"
+    description     = "Kubernetes API Server from bastion and masters"
     from_port       = 6443
     to_port         = 6443
     protocol        = "tcp"
-    security_groups = [aws_security_group.worker.id, aws_security_group.bastion.id, aws_security_group.master.id]
+    security_groups = [aws_security_group.bastion.id, aws_security_group.master.id]
   }
 
   egress {
@@ -224,5 +216,64 @@ resource "aws_security_group" "ingress_lb" {
   tags = {
     Name = "${var.cluster_name}-ingress-lb-sg"
   }
+}
+
+# ============================================
+# Security Group Rules (to break circular dependencies)
+# ============================================
+
+# Master: Kubernetes API Server from workers
+resource "aws_security_group_rule" "master_api_from_workers" {
+  type                     = "ingress"
+  from_port                = 6443
+  to_port                  = 6443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.worker.id
+  security_group_id        = aws_security_group.master.id
+  description              = "Kubernetes API Server from workers"
+}
+
+# Master: Kubelet API from workers
+resource "aws_security_group_rule" "master_kubelet_from_workers" {
+  type                     = "ingress"
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.worker.id
+  security_group_id        = aws_security_group.master.id
+  description              = "Kubelet API from workers"
+}
+
+# Worker: Kubelet API from masters
+resource "aws_security_group_rule" "worker_kubelet_from_masters" {
+  type                     = "ingress"
+  from_port                = 10250
+  to_port                  = 10250
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.master.id
+  security_group_id        = aws_security_group.worker.id
+  description              = "Kubelet API from masters"
+}
+
+# Worker: All traffic from masters (for networking)
+resource "aws_security_group_rule" "worker_all_from_masters" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = aws_security_group.master.id
+  security_group_id        = aws_security_group.worker.id
+  description              = "All traffic from masters"
+}
+
+# API LB: Kubernetes API Server from workers (already has master and bastion inline)
+resource "aws_security_group_rule" "api_lb_from_workers" {
+  type                     = "ingress"
+  from_port                = 6443
+  to_port                  = 6443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.worker.id
+  security_group_id        = aws_security_group.api_lb.id
+  description              = "Kubernetes API Server from workers"
 }
 

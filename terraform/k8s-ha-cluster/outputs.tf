@@ -106,21 +106,21 @@ output "next_steps" {
     ============================================
     
     1. Connect to bastion:
-       ${self.bastion_ssh_command.value}
+       ssh -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}
     
     2. From bastion, connect to master1:
        ssh -i ${var.cluster_name}-key.pem ubuntu@${module.master_node_1.private_ip}
     
     3. Get kubeconfig:
-       ${self.kubeconfig_command.value}
+       scp -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.kube/config ~/.kube/config
     
     4. Verify cluster:
        kubectl get nodes
        kubectl get pods --all-namespaces
     
-    5. API Server Endpoint: ${self.api_server_endpoint.value}:6443
+    5. API Server Endpoint: ${module.api_lb.dns_name}:6443
     
-    6. Ingress Endpoint: http://${self.ingress_lb_endpoint.value}
+    6. Ingress Endpoint: http://${module.ingress_lb.dns_name}
     
     ============================================
   EOT

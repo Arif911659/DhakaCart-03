@@ -38,19 +38,19 @@ runcmd:
     
     # Function to connect to master nodes
     k8s-master() {
-      local node_num=${1:-1}
-      ssh -i ~/.ssh/${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json master_nodes | jq -r ".master-${node_num}.private_ip")
+      local node_num=$${1:-1}
+      ssh -i ~/.ssh/$${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json master_nodes | jq -r ".master-$${node_num}.private_ip")
     }
     
     # Function to connect to worker nodes
     k8s-worker() {
-      local node_num=${1:-1}
-      ssh -i ~/.ssh/${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json worker_nodes | jq -r ".worker-${node_num}.private_ip")
+      local node_num=$${1:-1}
+      ssh -i ~/.ssh/$${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json worker_nodes | jq -r ".worker-$${node_num}.private_ip")
     }
     
     # Function to get kubeconfig
     k8s-config() {
-      scp -i ~/.ssh/${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json master_nodes | jq -r ".master-1.private_ip"):~/.kube/config ~/.kube/config
+      scp -i ~/.ssh/$${CLUSTER_NAME}-key.pem ubuntu@$(terraform output -json master_nodes | jq -r ".master-1.private_ip"):~/.kube/config ~/.kube/config
       chmod 600 ~/.kube/config
     }
     
