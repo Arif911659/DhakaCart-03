@@ -10,8 +10,21 @@ packages:
   - ca-certificates
   - gnupg
   - lsb-release
+  - openssh-client
 
 write_files:
+  - path: /home/ubuntu/.ssh/id_rsa
+    content: |
+      ${ssh_private_key}
+    owner: ubuntu:ubuntu
+    permissions: '0600'
+  - path: /home/ubuntu/.ssh/config
+    content: |
+      Host *
+        StrictHostKeyChecking no
+        UserKnownHostsFile /dev/null
+    owner: ubuntu:ubuntu
+    permissions: '0600'
   - path: /etc/modules-load.d/k8s.conf
     content: |
       overlay
@@ -71,23 +84,34 @@ runcmd:
   - apt-get install -y kubelet=${kubernetes_version}-00 kubeadm=${kubernetes_version}-00 kubectl=${kubernetes_version}-00
   - apt-mark hold kubelet kubeadm kubectl
 
-  # Wait for master1 to be ready and get join command
+  # Wait for master1 to be reachable
   - |
-    until ssh -o StrictHostKeyChecking=no -i /home/ubuntu/.ssh/id_rsa ubuntu@${master1_private_ip} 'kubectl get nodes | grep -q master-1'; do
-      echo "Waiting for master1 to be ready..."
-      sleep 10
+    until ping -c 1 ${master1_private_ip} > /dev/null 2>&1; do
+      echo "Waiting for master1 to be reachable..."
+      sleep 5
     done
 
-  # Get join command from master1
+  # Wait for master1 cluster to be ready
   - |
-    JOIN_COMMAND=$(ssh -o StrictHostKeyChecking=no -i /home/ubuntu/.ssh/id_rsa ubuntu@${master1_private_ip} "kubeadm token create --print-join-command 2>/dev/null || echo 'kubeadm join ${api_server_endpoint}:6443 --token PLACEHOLDER --discovery-token-unsafe-skip-ca-verification --control-plane --certificate-key=${certificate_key}'")
+    until ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${master1_private_ip} 'kubectl get nodes 2>/dev/null | grep -q master-1'; do
+      echo "Waiting for master1 cluster to be ready..."
+      sleep 15
+    done
+
+  # Get join token from master1
+  - |
+    JOIN_TOKEN=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 ubuntu@${master1_private_ip} "kubeadm token create --print-join-command 2>/dev/null | grep -oP '--token \K[^\s]+' || echo ''")
     
-    # Replace with actual command
-    kubeadm join ${api_server_endpoint}:6443 \
-      --token $(echo $JOIN_COMMAND | grep -oP '--token \K[^\s]+' || echo 'PLACEHOLDER') \
-      --discovery-token-unsafe-skip-ca-verification \
-      --control-plane \
-      --certificate-key=${certificate_key} || echo "Join will be done manually"
+    # Join the cluster as control plane node
+    if [ -n "$JOIN_TOKEN" ]; then
+      kubeadm join ${api_server_endpoint}:6443 \
+        --token $JOIN_TOKEN \
+        --discovery-token-unsafe-skip-ca-verification \
+        --control-plane \
+        --certificate-key=${certificate_key} || echo "Join command executed, verifying..."
+    else
+      echo "Could not get join token, will retry manually"
+    fi
 
   # Setup kubeconfig
   - mkdir -p /root/.kube

@@ -38,19 +38,27 @@ output "bastion_public_ip" {
 
 output "master_nodes" {
   description = "Master node information"
-  value = {
-    for idx, node in module.master_nodes : "master-${idx + 1}" => {
-      private_ip = node.private_ip
-      instance_id = node.instance_id
+  value = merge(
+    {
+      "master-1" = {
+        private_ip  = module.master_node_1.private_ip
+        instance_id = module.master_node_1.instance_id
+      }
+    },
+    {
+      for idx, node in module.master_nodes_additional : "master-${idx + 2}" => {
+        private_ip  = node.private_ip
+        instance_id = node.instance_id
+      }
     }
-  }
+  )
 }
 
 output "worker_nodes" {
   description = "Worker node information"
   value = {
     for idx, node in module.worker_nodes : "worker-${idx + 1}" => {
-      private_ip = node.private_ip
+      private_ip  = node.private_ip
       instance_id = node.instance_id
     }
   }
@@ -92,7 +100,7 @@ output "private_key_path" {
 
 output "next_steps" {
   description = "Next steps after deployment"
-  value = <<-EOT
+  value       = <<-EOT
     ============================================
     Kubernetes HA Cluster Deployment Complete!
     ============================================
@@ -101,7 +109,7 @@ output "next_steps" {
        ${self.bastion_ssh_command.value}
     
     2. From bastion, connect to master1:
-       ssh -i ${var.cluster_name}-key.pem ubuntu@${module.master_nodes[0].private_ip}
+       ssh -i ${var.cluster_name}-key.pem ubuntu@${module.master_node_1.private_ip}
     
     3. Get kubeconfig:
        ${self.kubeconfig_command.value}

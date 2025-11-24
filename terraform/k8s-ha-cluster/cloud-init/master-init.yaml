@@ -10,8 +10,21 @@ packages:
   - ca-certificates
   - gnupg
   - lsb-release
+  - openssh-client
 
 write_files:
+  - path: /home/ubuntu/.ssh/id_rsa
+    content: |
+      ${ssh_private_key}
+    owner: ubuntu:ubuntu
+    permissions: '0600'
+  - path: /home/ubuntu/.ssh/config
+    content: |
+      Host *
+        StrictHostKeyChecking no
+        UserKnownHostsFile /dev/null
+    owner: ubuntu:ubuntu
+    permissions: '0600'
   - path: /etc/modules-load.d/k8s.conf
     content: |
       overlay

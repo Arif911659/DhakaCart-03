@@ -4,7 +4,7 @@
 
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -31,7 +31,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "DhakaCart-K8s-HA"
@@ -94,13 +94,13 @@ resource "local_file" "private_key" {
 module "vpc" {
   source = "./modules/vpc"
 
-  cluster_name        = var.cluster_name
-  vpc_cidr            = var.vpc_cidr
-  availability_zones  = slice(data.aws_availability_zones.available.names, 0, var.num_azs)
-  public_subnet_cidrs = var.public_subnet_cidrs
+  cluster_name         = var.cluster_name
+  vpc_cidr             = var.vpc_cidr
+  availability_zones   = slice(data.aws_availability_zones.available.names, 0, var.num_azs)
+  public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
-  enable_nat_gateway  = true
-  single_nat_gateway  = false # One NAT per AZ for HA
+  enable_nat_gateway   = true
+  single_nat_gateway   = false # One NAT per AZ for HA
 }
 
 # ============================================
@@ -122,12 +122,14 @@ module "security_groups" {
 module "api_lb" {
   source = "./modules/load-balancer"
 
-  name              = "${var.cluster_name}-api-lb"
-  internal          = true
+  name               = "${var.cluster_name}-api-lb"
+  internal           = true
   load_balancer_type = "network"
-  subnets           = module.vpc.private_subnet_ids
-  vpc_id            = module.vpc.vpc_id
-  security_groups   = [module.security_groups.api_lb_sg_id]
+  subnets            = module.vpc.private_subnet_ids
+  vpc_id             = module.vpc.vpc_id
+  # Network Load Balancers don't support security groups
+  # Security is handled at the instance level via security groups
+  security_groups = []
 
   listeners = [
     {
@@ -149,12 +151,12 @@ module "api_lb" {
 module "ingress_lb" {
   source = "./modules/load-balancer"
 
-  name              = "${var.cluster_name}-ingress-lb"
-  internal          = false
+  name               = "${var.cluster_name}-ingress-lb"
+  internal           = false
   load_balancer_type = "application"
-  subnets           = module.vpc.public_subnet_ids
-  vpc_id            = module.vpc.vpc_id
-  security_groups   = [module.security_groups.ingress_lb_sg_id]
+  subnets            = module.vpc.public_subnet_ids
+  vpc_id             = module.vpc.vpc_id
+  security_groups    = [module.security_groups.ingress_lb_sg_id]
 
   listeners = [
     {
@@ -193,39 +195,65 @@ resource "random_password" "certificate_key" {
 # Master Nodes
 # ============================================
 
-module "master_nodes" {
+# Master Node 1 (Initializes cluster)
+module "master_node_1" {
   source = "./modules/ec2"
 
-  count = var.num_masters
-
-  name                 = "${var.cluster_name}-master-${count.index + 1}"
+  name                 = "${var.cluster_name}-master-1"
   ami_id               = data.aws_ami.ubuntu.id
   instance_type        = var.master_instance_type
   key_name             = aws_key_pair.k8s_key.key_name
-  subnet_id            = module.vpc.private_subnet_ids[count.index % var.num_azs]
+  subnet_id            = module.vpc.private_subnet_ids[0]
   security_group_ids   = [module.security_groups.master_sg_id]
   iam_instance_profile = aws_iam_instance_profile.k8s_node.name
 
-  user_data = count.index == 0 ? base64encode(templatefile("${path.module}/cloud-init/master-init.yaml", {
-    api_server_endpoint = module.api_lb.dns_name
-    cluster_name       = var.cluster_name
-    pod_cidr           = var.pod_cidr
-    service_cidr       = var.service_cidr
-    certificate_key    = random_password.certificate_key.result
-    kubernetes_version  = var.kubernetes_version
-  })) : base64encode(templatefile("${path.module}/cloud-init/master-join.yaml", {
+  user_data = base64encode(templatefile("${path.module}/cloud-init/master-init.yaml", {
     api_server_endpoint = module.api_lb.dns_name
     cluster_name        = var.cluster_name
     pod_cidr            = var.pod_cidr
     service_cidr        = var.service_cidr
     certificate_key     = random_password.certificate_key.result
-    kubernetes_version   = var.kubernetes_version
-    master1_private_ip   = module.master_nodes[0].private_ip
+    kubernetes_version  = var.kubernetes_version
+    ssh_private_key     = tls_private_key.k8s_key.private_key_pem
   }))
 
   tags = {
     Role = "master"
-    Node = "master-${count.index + 1}"
+    Node = "master-1"
+  }
+}
+
+# Additional Master Nodes (Join cluster)
+module "master_nodes_additional" {
+  source = "./modules/ec2"
+
+  count = var.num_masters > 1 ? var.num_masters - 1 : 0
+
+  name                 = "${var.cluster_name}-master-${count.index + 2}"
+  ami_id               = data.aws_ami.ubuntu.id
+  instance_type        = var.master_instance_type
+  key_name             = aws_key_pair.k8s_key.key_name
+  subnet_id            = module.vpc.private_subnet_ids[(count.index + 1) % var.num_azs]
+  security_group_ids   = [module.security_groups.master_sg_id]
+  iam_instance_profile = aws_iam_instance_profile.k8s_node.name
+
+  user_data = base64encode(templatefile("${path.module}/cloud-init/master-join.yaml", {
+    api_server_endpoint = module.api_lb.dns_name
+    cluster_name        = var.cluster_name
+    pod_cidr            = var.pod_cidr
+    service_cidr        = var.service_cidr
+    certificate_key     = random_password.certificate_key.result
+    kubernetes_version  = var.kubernetes_version
+    master1_private_ip  = module.master_node_1.private_ip
+    ssh_private_key     = tls_private_key.k8s_key.private_key_pem
+  }))
+
+  # Wait for master-1 to be ready before starting additional masters
+  depends_on = [module.master_node_1]
+
+  tags = {
+    Role = "master"
+    Node = "master-${count.index + 2}"
   }
 }
 
@@ -249,9 +277,13 @@ module "worker_nodes" {
   user_data = base64encode(templatefile("${path.module}/cloud-init/worker-join.yaml", {
     api_server_endpoint = module.api_lb.dns_name
     join_token          = random_password.join_token.result
-    master1_private_ip  = module.master_nodes[0].private_ip
+    master1_private_ip  = module.master_node_1.private_ip
     kubernetes_version  = var.kubernetes_version
+    ssh_private_key     = tls_private_key.k8s_key.private_key_pem
   }))
+
+  # Wait for master-1 to be ready before starting workers
+  depends_on = [module.master_node_1]
 
   tags = {
     Role = "worker"
@@ -340,10 +372,16 @@ resource "aws_lb_listener" "api_server" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "api_masters" {
-  count            = var.num_masters
+resource "aws_lb_target_group_attachment" "api_master_1" {
   target_group_arn = aws_lb_target_group.api_server.arn
-  target_id        = module.master_nodes[count.index].instance_id
+  target_id        = module.master_node_1.instance_id
+  port             = 6443
+}
+
+resource "aws_lb_target_group_attachment" "api_masters_additional" {
+  count            = var.num_masters > 1 ? var.num_masters - 1 : 0
+  target_group_arn = aws_lb_target_group.api_server.arn
+  target_id        = module.master_nodes_additional[count.index].instance_id
   port             = 6443
 }
 
@@ -352,13 +390,13 @@ resource "aws_lb_target_group_attachment" "api_masters" {
 # ============================================
 
 resource "null_resource" "copy_key_to_bastion" {
-  depends_on = [module.bastion]
+  depends_on = [module.bastion, module.master_node_1]
 
   provisioner "local-exec" {
     command = <<-EOT
-      sleep 30
-      scp -o StrictHostKeyChecking=no -i ${var.cluster_name}-key.pem ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.ssh/${var.cluster_name}-key.pem
-      ssh -o StrictHostKeyChecking=no -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip} "chmod 600 ~/.ssh/${var.cluster_name}-key.pem"
+      sleep 45
+      scp -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || echo "Key copy will be done manually"
+      ssh -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip} "chmod 600 ~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || true"
     EOT
   }
 }
