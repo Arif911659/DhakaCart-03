@@ -37,3 +37,11 @@ coverage/
 
 # Misc
 .cache/
+
+# AWS Credentials
+.aws/
+*.pem
+*-key.pem
+terraform.tfvars
+*.tfvars
+!*.tfvars.example
