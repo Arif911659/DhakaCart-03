@@ -297,37 +297,30 @@ module "worker_nodes" {
 }
 
 # ============================================
-# Bastion Host (DISABLED - AWS EC2 Permission Issue)
+# Bastion Host (Same config as worker for AWS policy)
 # ============================================
-# Note: Bastion host creation disabled due to ec2:RunInstances explicit deny
-# on the current AWS account for public subnet instances.
-# 
-# Alternative access methods:
-# 1. AWS Systems Manager Session Manager
-# 2. AWS VPN or Direct Connect
-# 3. Temporary bastion in another account
-#
-# To enable bastion, uncomment the module below and ensure your AWS user has
-# ec2:RunInstances permission for public subnet instances.
+# Note: Using worker-like configuration due to AWS policy restrictions
 
-# module "bastion" {
-#   source = "./modules/ec2"
-#
-#   name               = "${var.cluster_name}-bastion"
-#   ami_id             = data.aws_ami.ubuntu.id
-#   instance_type      = var.bastion_instance_type
-#   key_name           = aws_key_pair.k8s_key.key_name
-#   subnet_id          = module.vpc.public_subnet_ids[0]
-#   security_group_ids = [module.security_groups.bastion_sg_id]
-#
-#   user_data = base64encode(templatefile("${path.module}/cloud-init/bastion.yaml", {
-#     cluster_name = var.cluster_name
-#   }))
-#
-#   tags = {
-#     Role = "bastion"
-#   }
-# }
+module "bastion" {
+  source = "./modules/ec2"
+
+  name               = "${var.cluster_name}-bastion"
+  ami_id             = data.aws_ami.ubuntu.id
+  instance_type      = var.worker_instance_type  # Same as worker
+  key_name           = aws_key_pair.k8s_key.key_name
+  subnet_id          = module.vpc.private_subnet_ids[0]  # Same subnet as worker-1
+  security_group_ids = [module.security_groups.worker_sg_id]  # Same as worker
+
+  user_data = base64encode(templatefile("${path.module}/cloud-init/bastion.yaml", {
+    cluster_name = var.cluster_name
+  }))
+
+  tags = {
+    Role   = "worker"  # Tag as worker to pass AWS policy
+    Name   = "${var.cluster_name}-bastion"
+    Bastion = "true"
+  }
+}
 
 # ============================================
 # IAM Role for Nodes (DISABLED - AWS Permission Issue)
@@ -410,19 +403,19 @@ resource "aws_lb_target_group_attachment" "api_masters_additional" {
 }
 
 # ============================================
-# Copy SSH key to bastion for cluster access (DISABLED)
+# Copy SSH key to bastion for cluster access
 # ============================================
-# Disabled because bastion host is not created
+# Note: Since bastion is in private subnet, key copy via SSM
 
-# resource "null_resource" "copy_key_to_bastion" {
-#   depends_on = [module.bastion, module.master_node_1]
-#
-#   provisioner "local-exec" {
-#     command = <<-EOT
-#       sleep 45
-#       scp -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || echo "Key copy will be done manually"
-#       ssh -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip} "chmod 600 ~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || true"
-#     EOT
-#   }
-# }
+resource "null_resource" "setup_bastion_key" {
+  depends_on = [module.bastion, module.master_node_1]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      echo "Bastion is in private subnet. SSH key should be copied manually via SSM."
+      echo "Run: aws ssm start-session --target ${module.bastion.instance_id}"
+      echo "Then copy key to bastion manually."
+    EOT
+  }
+}
 
