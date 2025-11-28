@@ -55,7 +55,18 @@ ssh -i dhakacart-k8s-key.pem ubuntu@47.128.147.39
 chmod 400 ~/.ssh/dhakacart-k8s-key.pem
 ```
 
-### 3. From Bastion, SSH to Nodes:
+### 3. Test Connectivity (Ping):
+
+```bash
+# From bastion, test all nodes
+ping -c 2 10.0.10.100  # Master-1 ✅
+ping -c 2 10.0.10.36   # Master-2 ✅
+ping -c 2 10.0.10.224  # Worker-1 ✅
+ping -c 2 10.0.10.213  # Worker-2 ✅
+ping -c 2 10.0.10.84   # Worker-3 ✅
+```
+
+### 4. From Bastion, SSH to Nodes:
 
 ```bash
 # Master-1
@@ -164,6 +175,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 - ✅ Bastion as single entry point
 - ✅ Security groups properly configured
 - ✅ SSH key authentication only
+- ✅ ICMP (ping) allowed from bastion to nodes
 - ✅ Internet access via NAT Gateway
 
 ---

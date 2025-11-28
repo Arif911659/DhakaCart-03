@@ -222,6 +222,15 @@ resource "aws_security_group" "k8s_nodes" {
     description     = "SSH from bastion"
   }
 
+  # ICMP (ping) from bastion
+  ingress {
+    from_port       = -1
+    to_port         = -1
+    protocol        = "icmp"
+    security_groups = [aws_security_group.bastion.id]
+    description     = "ICMP ping from bastion"
+  }
+
   # NodePort range from Load Balancer (30000-32767)
   ingress {
     from_port       = 30000
