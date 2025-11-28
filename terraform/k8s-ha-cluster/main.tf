@@ -210,7 +210,7 @@ module "master_node_1" {
   key_name             = aws_key_pair.k8s_key.key_name
   subnet_id            = module.vpc.private_subnet_ids[0]
   security_group_ids   = [module.security_groups.master_sg_id]
-  iam_instance_profile = aws_iam_instance_profile.k8s_node.name
+  # iam_instance_profile removed due to AWS permission restrictions
 
   user_data = base64encode(templatefile("${path.module}/cloud-init/master-init.yaml", {
     api_server_endpoint = module.api_lb.dns_name
@@ -240,7 +240,7 @@ module "master_nodes_additional" {
   key_name             = aws_key_pair.k8s_key.key_name
   subnet_id            = module.vpc.private_subnet_ids[(count.index + 1) % var.num_azs]
   security_group_ids   = [module.security_groups.master_sg_id]
-  iam_instance_profile = aws_iam_instance_profile.k8s_node.name
+  # iam_instance_profile removed due to AWS permission restrictions
 
   user_data = base64encode(templatefile("${path.module}/cloud-init/master-join.yaml", {
     api_server_endpoint = module.api_lb.dns_name
@@ -277,7 +277,7 @@ module "worker_nodes" {
   key_name             = aws_key_pair.k8s_key.key_name
   subnet_id            = module.vpc.private_subnet_ids[count.index % var.num_azs]
   security_group_ids   = [module.security_groups.worker_sg_id]
-  iam_instance_profile = aws_iam_instance_profile.k8s_node.name
+  # iam_instance_profile removed due to AWS permission restrictions
 
   user_data = base64encode(templatefile("${path.module}/cloud-init/worker-join.yaml", {
     api_server_endpoint = module.api_lb.dns_name
@@ -320,41 +320,44 @@ module "bastion" {
 }
 
 # ============================================
-# IAM Role for Nodes
+# IAM Role for Nodes (DISABLED - AWS Permission Issue)
 # ============================================
+# Note: IAM resources removed due to iam:TagInstanceProfile permission restriction
+# on the current AWS account. EC2 instances will run without IAM instance profiles.
+# To enable IAM roles, uncomment the resources below and ensure your AWS user has:
+# - iam:CreateRole
+# - iam:CreateInstanceProfile
+# - iam:TagRole
+# - iam:TagInstanceProfile
+# - iam:AddRoleToInstanceProfile
+# - iam:AttachRolePolicy
+# - iam:PassRole
 
-resource "aws_iam_role" "k8s_node" {
-  name = "${var.cluster_name}-node-role"
+# resource "aws_iam_role" "k8s_node" {
+#   name = "${var.cluster_name}-node-role"
+#   assume_role_policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action = "sts:AssumeRole"
+#         Effect = "Allow"
+#         Principal = {
+#           Service = "ec2.amazonaws.com"
+#         }
+#       }
+#     ]
+#   })
+# }
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
-  })
+# resource "aws_iam_instance_profile" "k8s_node" {
+#   name = "${var.cluster_name}-node-profile"
+#   role = aws_iam_role.k8s_node.name
+# }
 
-  # Disable tags to avoid iam:TagRole permission requirement
-  tags = {}
-}
-
-resource "aws_iam_instance_profile" "k8s_node" {
-  name = "${var.cluster_name}-node-profile"
-  role = aws_iam_role.k8s_node.name
-
-  # Disable tags to avoid iam:TagRole permission requirement
-  tags = {}
-}
-
-resource "aws_iam_role_policy_attachment" "k8s_node_ec2" {
-  role       = aws_iam_role.k8s_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
-}
+# resource "aws_iam_role_policy_attachment" "k8s_node_ec2" {
+#   role       = aws_iam_role.k8s_node.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+# }
 
 # ============================================
 # Target Groups for API Server LB

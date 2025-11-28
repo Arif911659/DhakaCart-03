@@ -6,7 +6,9 @@ resource "aws_instance" "node" {
   key_name               = var.key_name
   subnet_id              = var.subnet_id
   vpc_security_group_ids = var.security_group_ids
-  iam_instance_profile   = var.iam_instance_profile
+  
+  # IAM instance profile is optional - only set if provided
+  iam_instance_profile   = var.iam_instance_profile != "" ? var.iam_instance_profile : null
 
   user_data = var.user_data != "" ? var.user_data : null
 
