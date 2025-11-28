@@ -297,27 +297,37 @@ module "worker_nodes" {
 }
 
 # ============================================
-# Bastion Host
+# Bastion Host (DISABLED - AWS EC2 Permission Issue)
 # ============================================
+# Note: Bastion host creation disabled due to ec2:RunInstances explicit deny
+# on the current AWS account for public subnet instances.
+# 
+# Alternative access methods:
+# 1. AWS Systems Manager Session Manager
+# 2. AWS VPN or Direct Connect
+# 3. Temporary bastion in another account
+#
+# To enable bastion, uncomment the module below and ensure your AWS user has
+# ec2:RunInstances permission for public subnet instances.
 
-module "bastion" {
-  source = "./modules/ec2"
-
-  name               = "${var.cluster_name}-bastion"
-  ami_id             = data.aws_ami.ubuntu.id
-  instance_type      = var.bastion_instance_type
-  key_name           = aws_key_pair.k8s_key.key_name
-  subnet_id          = module.vpc.public_subnet_ids[0]
-  security_group_ids = [module.security_groups.bastion_sg_id]
-
-  user_data = base64encode(templatefile("${path.module}/cloud-init/bastion.yaml", {
-    cluster_name = var.cluster_name
-  }))
-
-  tags = {
-    Role = "bastion"
-  }
-}
+# module "bastion" {
+#   source = "./modules/ec2"
+#
+#   name               = "${var.cluster_name}-bastion"
+#   ami_id             = data.aws_ami.ubuntu.id
+#   instance_type      = var.bastion_instance_type
+#   key_name           = aws_key_pair.k8s_key.key_name
+#   subnet_id          = module.vpc.public_subnet_ids[0]
+#   security_group_ids = [module.security_groups.bastion_sg_id]
+#
+#   user_data = base64encode(templatefile("${path.module}/cloud-init/bastion.yaml", {
+#     cluster_name = var.cluster_name
+#   }))
+#
+#   tags = {
+#     Role = "bastion"
+#   }
+# }
 
 # ============================================
 # IAM Role for Nodes (DISABLED - AWS Permission Issue)
@@ -400,18 +410,19 @@ resource "aws_lb_target_group_attachment" "api_masters_additional" {
 }
 
 # ============================================
-# Copy SSH key to bastion for cluster access
+# Copy SSH key to bastion for cluster access (DISABLED)
 # ============================================
+# Disabled because bastion host is not created
 
-resource "null_resource" "copy_key_to_bastion" {
-  depends_on = [module.bastion, module.master_node_1]
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      sleep 45
-      scp -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || echo "Key copy will be done manually"
-      ssh -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip} "chmod 600 ~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || true"
-    EOT
-  }
-}
+# resource "null_resource" "copy_key_to_bastion" {
+#   depends_on = [module.bastion, module.master_node_1]
+#
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       sleep 45
+#       scp -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || echo "Key copy will be done manually"
+#       ssh -o StrictHostKeyChecking=no -i ${path.module}/${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip} "chmod 600 ~/.ssh/${var.cluster_name}-key.pem 2>/dev/null || true"
+#     EOT
+#   }
+# }
 

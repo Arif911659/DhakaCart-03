@@ -26,15 +26,16 @@ output "ingress_lb_endpoint" {
   value       = module.ingress_lb.dns_name
 }
 
-output "bastion_ssh_command" {
-  description = "SSH command to connect to bastion host"
-  value       = "ssh -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}"
-}
+# Bastion outputs disabled - bastion not created due to AWS permission restrictions
+# output "bastion_ssh_command" {
+#   description = "SSH command to connect to bastion host"
+#   value       = "ssh -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}"
+# }
 
-output "bastion_public_ip" {
-  description = "Public IP of bastion host"
-  value       = module.bastion.public_ip
-}
+# output "bastion_public_ip" {
+#   description = "Public IP of bastion host"
+#   value       = module.bastion.public_ip
+# }
 
 output "master_nodes" {
   description = "Master node information"
@@ -65,8 +66,8 @@ output "worker_nodes" {
 }
 
 output "kubeconfig_command" {
-  description = "Command to get kubeconfig from master1"
-  value       = "scp -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.kube/config ~/.kube/config"
+  description = "Command to get kubeconfig from master1 (use AWS SSM or VPN to access)"
+  value       = "Use AWS SSM Session Manager to connect to master-1 (${module.master_node_1.private_ip}) and copy kubeconfig"
 }
 
 output "join_token" {
@@ -105,16 +106,17 @@ output "next_steps" {
     Kubernetes HA Cluster Deployment Complete!
     ============================================
     
-    1. Connect to bastion:
-       ssh -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}
+    NOTE: Bastion host not created due to AWS permission restrictions.
+    Use AWS SSM Session Manager to access nodes.
     
-    2. From bastion, connect to master1:
-       ssh -i ${var.cluster_name}-key.pem ubuntu@${module.master_node_1.private_ip}
+    1. Access master-1 via AWS SSM:
+       aws ssm start-session --target ${module.master_node_1.instance_id}
     
-    3. Get kubeconfig:
-       scp -i ${var.cluster_name}-key.pem ubuntu@${module.bastion.public_ip}:~/.kube/config ~/.kube/config
+    2. Or use EC2 Instance Connect from AWS Console
     
-    4. Verify cluster:
+    3. Master-1 Private IP: ${module.master_node_1.private_ip}
+    
+    4. Verify cluster (from master-1):
        kubectl get nodes
        kubectl get pods --all-namespaces
     
