@@ -60,6 +60,24 @@
     │  └───────────────────────────────────────────┘       │
     └──────────────────────────────────────────────────────┘
 ```
+## Updated Checklist:
+✅ Phase 1: Infrastructure (COMPLETED)
+   ✅ Terraform apply
+   ✅ Load Balancer configured
+   ✅ Security Groups
+   ✅ ICMP (ping) enabled
+   ✅ Connectivity tested
+
+⏳ Phase 2: Kubernetes (NEXT STEP)
+   □ Install kubeadm
+   □ Initialize master-1
+   □ Join nodes
+
+⏳ Phase 3: Application
+   □ Deploy DhakaCart
+
+⏳ Phase 4: Public Access
+   □ Configure Ingress
 
 ---
 
