@@ -34,28 +34,46 @@ output "ssh_to_workers" {
   ]
 }
 
+output "load_balancer_url" {
+  description = "Public URL for DhakaCart application"
+  value       = "http://${aws_lb.app.dns_name}"
+}
+
+output "load_balancer_dns" {
+  description = "Load Balancer DNS name"
+  value       = aws_lb.app.dns_name
+}
+
 output "next_steps" {
   description = "Next steps after deployment"
   value = <<-EOT
-    =====================================
+    =============================================
     Kubernetes Infrastructure Deployed!
-    =====================================
+    =============================================
     
-    1. SSH to Bastion:
-       ssh -i ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}
+    📌 PUBLIC ACCESS URL (After K8s setup):
+    http://${aws_lb.app.dns_name}
     
-    2. Copy SSH key to bastion:
-       scp -i ${var.cluster_name}-key.pem ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}:~/.ssh/
+    🔑 SSH to Bastion:
+    ssh -i ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}
     
-    3. From bastion, SSH to master-1:
-       ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${aws_instance.masters[0].private_ip}
+    📋 Copy SSH key to bastion:
+    scp -i ${var.cluster_name}-key.pem ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}:~/.ssh/
     
-    Master IPs: ${join(", ", aws_instance.masters[*].private_ip)}
-    Worker IPs: ${join(", ", aws_instance.workers[*].private_ip)}
+    🖥️  From bastion, SSH to nodes:
+    Master-1: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${aws_instance.masters[0].private_ip}
+    Worker-1: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${aws_instance.workers[0].private_ip}
     
-    4. Install Kubernetes on all nodes (from bastion)
+    📊 Cluster Info:
+    Masters: ${join(", ", aws_instance.masters[*].private_ip)}
+    Workers: ${join(", ", aws_instance.workers[*].private_ip)}
     
-    =====================================
+    🚀 Next Steps:
+    1. Install Kubernetes on all nodes
+    2. Deploy DhakaCart application
+    3. Access via: http://${aws_lb.app.dns_name}
+    
+    =============================================
   EOT
 }
 

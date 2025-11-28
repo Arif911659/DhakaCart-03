@@ -38,15 +38,27 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# Public Subnet (for Bastion)
-resource "aws_subnet" "public" {
+# Public Subnet 1 (for Bastion and Load Balancer)
+resource "aws_subnet" "public_1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.cluster_name}-public-subnet"
+    Name = "${var.cluster_name}-public-subnet-1"
+  }
+}
+
+# Public Subnet 2 (for Load Balancer - needs 2 AZs)
+resource "aws_subnet" "public_2" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.cluster_name}-public-subnet-2"
   }
 }
 
@@ -73,7 +85,7 @@ resource "aws_eip" "nat" {
 # NAT Gateway (for private subnet internet access)
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  subnet_id     = aws_subnet.public_1.id
 
   tags = {
     Name = "${var.cluster_name}-nat"
@@ -111,8 +123,13 @@ resource "aws_route_table" "private" {
 }
 
 # Route Table Associations
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
+resource "aws_route_table_association" "public_1" {
+  subnet_id      = aws_subnet.public_1.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_2" {
+  subnet_id      = aws_subnet.public_2.id
   route_table_id = aws_route_table.public.id
 }
 
@@ -124,6 +141,43 @@ resource "aws_route_table_association" "private" {
 # ============================================
 # Security Groups
 # ============================================
+
+# Load Balancer Security Group
+resource "aws_security_group" "alb" {
+  name        = "${var.cluster_name}-alb-sg"
+  description = "Security group for application load balancer"
+  vpc_id      = aws_vpc.main.id
+
+  # HTTP from anywhere
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from anywhere"
+  }
+
+  # HTTPS from anywhere
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from anywhere"
+  }
+
+  # All outbound traffic
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-alb-sg"
+  }
+}
 
 # Bastion Security Group
 resource "aws_security_group" "bastion" {
@@ -168,12 +222,21 @@ resource "aws_security_group" "k8s_nodes" {
     description     = "SSH from bastion"
   }
 
+  # NodePort range from Load Balancer (30000-32767)
+  ingress {
+    from_port       = 30000
+    to_port         = 32767
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "NodePort from ALB"
+  }
+
   # All traffic between k8s nodes
   ingress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
-    self      = true
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
     description = "All traffic between k8s nodes"
   }
 
@@ -243,7 +306,7 @@ resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.bastion_instance_type
   key_name               = aws_key_pair.k8s_key.key_name
-  subnet_id              = aws_subnet.public.id
+  subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.bastion.id]
 
   user_data = <<-EOF
@@ -301,6 +364,70 @@ resource "aws_instance" "workers" {
   tags = {
     Name = "${var.cluster_name}-worker-${count.index + 1}"
     Role = "worker"
+  }
+}
+
+# ============================================
+# Application Load Balancer
+# ============================================
+
+# Load Balancer
+resource "aws_lb" "app" {
+  name               = "${var.cluster_name}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "${var.cluster_name}-alb"
+  }
+}
+
+# Target Group (for Kubernetes NodePort)
+resource "aws_lb_target_group" "app" {
+  name     = "${var.cluster_name}-tg"
+  port     = 30080  # Kubernetes NodePort for Ingress
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/healthz"
+    port                = "30080"
+    protocol            = "HTTP"
+    matcher             = "200-399"
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-tg"
+  }
+}
+
+# Register Worker nodes to Target Group
+resource "aws_lb_target_group_attachment" "workers" {
+  count = var.worker_count
+
+  target_group_arn = aws_lb_target_group.app.arn
+  target_id        = aws_instance.workers[count.index].id
+  port             = 30080
+}
+
+# HTTP Listener
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
   }
 }
 
