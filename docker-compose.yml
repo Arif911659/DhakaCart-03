@@ -6,9 +6,9 @@ services:
     image: postgres:15-alpine
     container_name: dhakacart-db
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: dhakacart
+      POSTGRES_PASSWORD: dhakacart123
+      POSTGRES_DB: dhakacart_db
     ports:
       - "5432:5432"
     volumes:
@@ -41,21 +41,18 @@ services:
 
   # Backend API (Node.js/Express)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: dhakacart-backend:v1.0.0  # Custom image name
+    image: arifhossaincse22/dhakacart-backend:v1.0.0  # Docker Hub image
     container_name: dhakacart-backend
     environment:
-      NODE_ENV: ${NODE_ENV}
-      PORT: ${PORT}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_USER: dhakacart
+      DB_PASSWORD: dhakacart123
+      DB_NAME: dhakacart_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "5000:5000"
     depends_on:
@@ -63,27 +60,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
     networks:
       - dhakacart-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Frontend (React) - Production build with Nginx
+  # Frontend (React) - Development server
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: production  # Use production build with Nginx
-    image: dhakacart-frontend:v1.0.0
+    image: arifhossaincse22/dhakacart-frontend:v1.0.0  # Docker Hub image
     container_name: dhakacart-frontend
-    environment:
-      # Use relative URL - Nginx will proxy /api/ to backend container
-      # No public IP needed - all via Docker network
-      REACT_APP_API_URL: /api
     ports:
-      - "3000:80"  # Nginx listens on port 80
+      - "3000:3000"  # Dev server on port 3000
     depends_on:
       - backend
     networks:
