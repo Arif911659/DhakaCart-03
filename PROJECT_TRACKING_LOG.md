@@ -233,31 +233,30 @@ Prometheus:   http://localhost:9090
 
 ---
 
-## 🏗️ Simple K8s Infrastructure (28 Nov 2025)
+## ✅ K8s Infrastructure Deployed! (29 Nov 2025)
 
 ### 📁 Location: `terraform/simple-k8s/`
 
-**Architecture:**
-- 1 Bastion (Public, SSH accessible)
-- 2 Master nodes (Private, no public IP)
-- 3 Worker nodes (Private, no public IP)
-- NAT Gateway (for internet access)
+**Status:** ✅ All resources created successfully!
 
-**Deploy:**
-```bash
-cd terraform/simple-k8s
-terraform init
-terraform apply
-```
+**Deployed Resources:**
+- 1 Bastion (t2.micro, Public IP: 47.128.147.39)
+- 2 Master nodes (t2.small, Private)
+- 3 Worker nodes (t2.small, Private)
+- 1 Application Load Balancer (Public)
+- NAT Gateway, VPC, Security Groups
 
-**Access:**
-```bash
-# SSH to bastion
-ssh -i dhakacart-k8s-key.pem ubuntu@<PUBLIC_IP>
+**Solution:** Used t2.small instead of t2.medium (AWS permission restriction)
 
-# From bastion to nodes
-ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<PRIVATE_IP>
-```
+**Cost:** ~$5/day
+
+**Public URLs:**
+- Load Balancer: http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
+- Bastion SSH: ssh -i dhakacart-k8s-key.pem ubuntu@47.128.147.39
+
+**Key File:** `terraform/simple-k8s/dhakacart-k8s-key.pem` ✅
+
+**Next:** Install Kubernetes + Deploy DhakaCart
 
 ---
 
