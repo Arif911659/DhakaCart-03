@@ -233,6 +233,34 @@ Prometheus:   http://localhost:9090
 
 ---
 
+## 🏗️ Simple K8s Infrastructure (28 Nov 2025)
+
+### 📁 Location: `terraform/simple-k8s/`
+
+**Architecture:**
+- 1 Bastion (Public, SSH accessible)
+- 2 Master nodes (Private, no public IP)
+- 3 Worker nodes (Private, no public IP)
+- NAT Gateway (for internet access)
+
+**Deploy:**
+```bash
+cd terraform/simple-k8s
+terraform init
+terraform apply
+```
+
+**Access:**
+```bash
+# SSH to bastion
+ssh -i dhakacart-k8s-key.pem ubuntu@<PUBLIC_IP>
+
+# From bastion to nodes
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<PRIVATE_IP>
+```
+
+---
+
 ## 🧹 Cleanup Done (28 Nov 2025)
 
 ### ✅ Clean State:
