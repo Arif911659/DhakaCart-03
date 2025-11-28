@@ -29,7 +29,7 @@ Transform DhakaCart's fragile single-machine setup into a resilient, scalable, a
 
 | Service | URL | Status |
 |---------|-----|--------|
-| **DhakaCart Application** | http://dhakacart-k8s-ha-ingress-lb-1770210395.ap-southeast-1.elb.amazonaws.com | ⏳ Pending K8s deployment |
+| **DhakaCart Application** | http://dhakacart-k8s-ha-ingress-lb-1770210395.ap-southeast-1.elb.amazonaws.com | ⚠️ K8s cluster not initialized |
 | **API Server (Internal)** | dhakacart-k8s-ha-api-lb-8c5eae279d2560f9.elb.ap-southeast-1.amazonaws.com:6443 | ✅ Ready |
 
 ## 🔑 Bastion (Jumpbox) Access
@@ -135,6 +135,9 @@ ssh -p 2222 ubuntu@localhost
 ## 🔧 Pending Tasks
 
 - [x] Fix bastion host access ✅
+- [x] Configure Load Balancer target groups ✅
+- [ ] **Initialize Kubernetes cluster on master-1**
+- [ ] **Deploy NGINX Ingress Controller**
 - [ ] Deploy DhakaCart application to Kubernetes
 - [ ] Configure Ingress controller
 - [ ] Setup monitoring (Prometheus/Grafana)
@@ -180,4 +183,40 @@ ssh -p 2222 ubuntu@localhost
 
 **Updated by:** DevOps Automation  
 **Project Repository:** https://github.com/Arif911659/DhakaCart-03
+
+# Jumpbox এ connect করুন
+aws ssm start-session --target i-0e7c333cbe40f057c
+
+# Jumpbox থেকে master-1 এ SSH
+ssh -i ~/.ssh/dhakacart-k8s-ha-key.pem ubuntu@10.0.11.82
+
+# Jumpbox এ connect করুন
+aws ssm start-session --target i-0e7c333cbe40f057c
+
+# Jumpbox থেকে master-1 এ SSH
+ssh -i ~/.ssh/dhakacart-k8s-ha-key.pem ubuntu@10.0.11.82
+
+Internet
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│           VPC (10.0.0.0/16)             │
+│                                         │
+│  ┌─────────────────────────────────┐   │
+│  │      Public Subnets             │   │
+│  │  ┌─────────┐  ┌─────────────┐  │   │
+│  │  │ NAT GW  │  │ ALB (Ingress)│  │   │ ◄── Public Access
+│  │  └────┬────┘  └─────────────┘  │   │
+│  └───────┼─────────────────────────┘   │
+│          │                             │
+│  ┌───────▼─────────────────────────┐   │
+│  │      Private Subnets            │   │
+│  │  ┌─────────┐  ┌─────────────┐  │   │
+│  │  │Jumpbox  │  │ Masters (3) │  │   │ ◄── No Public IP
+│  │  │10.0.11. │  │ Workers (2) │  │   │     Internet via NAT ✅
+│  │  │219      │  │             │  │   │
+│  │  └─────────┘  └─────────────┘  │   │
+│  └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+
 

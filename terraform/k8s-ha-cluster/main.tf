@@ -132,16 +132,12 @@ module "api_lb" {
   load_balancer_type = "network"
   subnets            = module.vpc.private_subnet_ids
   vpc_id             = module.vpc.vpc_id
-  # Network Load Balancers don't support security groups
-  # Security is handled at the instance level via security groups
-  security_groups = []
+  security_groups    = []
 
-  listeners = [
-    {
-      port     = 6443
-      protocol = "TCP"
-    }
-  ]
+  # Target group for master nodes on port 6443
+  create_target_group = true
+  target_port         = 6443
+  target_ids          = []  # Targets added separately to avoid circular dependency
 
   health_check = {
     port     = 6443
@@ -163,22 +159,44 @@ module "ingress_lb" {
   vpc_id             = module.vpc.vpc_id
   security_groups    = [module.security_groups.ingress_lb_sg_id]
 
-  listeners = [
-    {
-      port     = 80
-      protocol = "HTTP"
-    },
-    {
-      port     = 443
-      protocol = "HTTPS"
-    }
-  ]
+  # Target group for worker nodes on port 30080 (NodePort for Ingress Controller)
+  create_target_group = true
+  target_port         = 30080  # Ingress Controller NodePort
+  target_ids          = []  # Targets added separately
 
   health_check = {
-    port     = 80
+    port     = 30080
     protocol = "HTTP"
     path     = "/healthz"
   }
+}
+
+# ============================================
+# Target Group Attachments (after nodes created)
+# ============================================
+
+# Register master nodes to API LB target group
+resource "aws_lb_target_group_attachment" "api_lb_master_1" {
+  target_group_arn = module.api_lb.target_group_arn
+  target_id        = module.master_node_1.instance_id
+  port             = 6443
+}
+
+resource "aws_lb_target_group_attachment" "api_lb_masters_additional" {
+  count = var.num_masters > 1 ? var.num_masters - 1 : 0
+
+  target_group_arn = module.api_lb.target_group_arn
+  target_id        = module.master_nodes_additional[count.index].instance_id
+  port             = 6443
+}
+
+# Register worker nodes to Ingress LB target group
+resource "aws_lb_target_group_attachment" "ingress_lb_workers" {
+  count = var.num_workers
+
+  target_group_arn = module.ingress_lb.target_group_arn
+  target_id        = module.worker_nodes[count.index].instance_id
+  port             = 30080
 }
 
 # ============================================
@@ -366,44 +384,10 @@ module "bastion" {
 # }
 
 # ============================================
-# Target Groups for API Server LB
+# Target Groups - Now managed by load-balancer module
 # ============================================
-
-resource "aws_lb_target_group" "api_server" {
-  name     = "${var.cluster_name}-api-tg"
-  port     = 6443
-  protocol = "TCP"
-  vpc_id   = module.vpc.vpc_id
-
-  health_check {
-    protocol = "TCP"
-    port     = 6443
-  }
-}
-
-resource "aws_lb_listener" "api_server" {
-  load_balancer_arn = module.api_lb.arn
-  port              = "6443"
-  protocol          = "TCP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api_server.arn
-  }
-}
-
-resource "aws_lb_target_group_attachment" "api_master_1" {
-  target_group_arn = aws_lb_target_group.api_server.arn
-  target_id        = module.master_node_1.instance_id
-  port             = 6443
-}
-
-resource "aws_lb_target_group_attachment" "api_masters_additional" {
-  count            = var.num_masters > 1 ? var.num_masters - 1 : 0
-  target_group_arn = aws_lb_target_group.api_server.arn
-  target_id        = module.master_nodes_additional[count.index].instance_id
-  port             = 6443
-}
+# Target groups and listeners are created by the load-balancer module
+# Target attachments are done in the module section above
 
 # ============================================
 # Copy SSH key to bastion for cluster access

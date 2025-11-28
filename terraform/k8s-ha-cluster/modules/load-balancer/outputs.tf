@@ -13,3 +13,7 @@ output "zone_id" {
   value       = aws_lb.main.zone_id
 }
 
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = var.create_target_group ? aws_lb_target_group.main[0].arn : null
+}
