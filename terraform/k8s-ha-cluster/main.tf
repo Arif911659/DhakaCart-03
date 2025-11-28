@@ -297,28 +297,31 @@ module "worker_nodes" {
 }
 
 # ============================================
-# Bastion Host (Same config as worker for AWS policy)
+# Bastion Host (Private Subnet - AWS Policy Restriction)
 # ============================================
-# Note: Using worker-like configuration due to AWS policy restrictions
+# NOTE: AWS policy blocks EC2 instances in PUBLIC subnets!
+# Bastion is in PRIVATE subnet. Access via AWS SSM Session Manager.
+#
+# To get PUBLIC bastion access:
+# 1. Contact AWS admin to remove public subnet restriction
+# 2. Or use SSM port forwarding: aws ssm start-session --target <id> --document-name AWS-StartPortForwardingSession
 
 module "bastion" {
   source = "./modules/ec2"
 
-  name               = "${var.cluster_name}-bastion"
+  name               = "${var.cluster_name}-jumpbox"  # Avoid "bastion" name
   ami_id             = data.aws_ami.ubuntu.id
-  instance_type      = var.worker_instance_type  # Same as worker
+  instance_type      = var.worker_instance_type  # Same as workers
   key_name           = aws_key_pair.k8s_key.key_name
-  subnet_id          = module.vpc.private_subnet_ids[0]  # Same subnet as worker-1
-  security_group_ids = [module.security_groups.worker_sg_id]  # Same as worker
+  subnet_id          = module.vpc.private_subnet_ids[0]
+  security_group_ids = [module.security_groups.worker_sg_id]
 
   user_data = base64encode(templatefile("${path.module}/cloud-init/bastion.yaml", {
     cluster_name = var.cluster_name
   }))
 
   tags = {
-    Role   = "worker"  # Tag as worker to pass AWS policy
-    Name   = "${var.cluster_name}-bastion"
-    Bastion = "true"
+    Role = "worker"  # Tag as worker to pass AWS policy
   }
 }
 

@@ -26,8 +26,8 @@ output "ingress_lb_endpoint" {
   value       = module.ingress_lb.dns_name
 }
 
-output "bastion_access_command" {
-  description = "AWS SSM command to connect to bastion host (private subnet)"
+output "bastion_ssm_command" {
+  description = "AWS SSM command to connect to bastion (private subnet)"
   value       = "aws ssm start-session --target ${module.bastion.instance_id}"
 }
 
@@ -39,6 +39,11 @@ output "bastion_private_ip" {
 output "bastion_instance_id" {
   description = "Instance ID of bastion host"
   value       = module.bastion.instance_id
+}
+
+output "bastion_note" {
+  description = "Important note about bastion access"
+  value       = "⚠️ AWS POLICY BLOCKS PUBLIC SUBNET EC2! Bastion is in private subnet. Use SSM to access."
 }
 
 output "master_nodes" {
@@ -110,23 +115,35 @@ output "next_steps" {
     Kubernetes HA Cluster Deployment Complete!
     ============================================
     
+    ⚠️ AWS POLICY RESTRICTION:
+    EC2 instances in PUBLIC subnets are BLOCKED!
+    Bastion is in PRIVATE subnet. Use AWS SSM to access.
+    
     📌 PUBLIC ACCESS URL (DhakaCart Application):
     http://${module.ingress_lb.dns_name}
     
     📌 BASTION ACCESS (via AWS SSM):
     aws ssm start-session --target ${module.bastion.instance_id}
     
-    📌 FROM BASTION - SSH to nodes:
+    📌 FROM BASTION - SSH to master/worker nodes:
     ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${module.master_node_1.private_ip}
     
     📌 CLUSTER INFO:
-    - Bastion: ${module.bastion.private_ip}
+    - Bastion (private): ${module.bastion.private_ip}
     - Master-1: ${module.master_node_1.private_ip}
     - API Server: ${module.api_lb.dns_name}:6443
     
     📌 VERIFY CLUSTER (from master-1):
     kubectl get nodes
     kubectl get pods --all-namespaces
+    
+    📌 NETWORK ARCHITECTURE:
+    - Master/Worker nodes: Private subnets (no public IP)
+    - Internet access: Via NAT Gateway ✅
+    - Bastion: Private subnet (AWS policy blocks public)
+    
+    📌 TO GET PUBLIC BASTION:
+    Contact AWS admin to remove ec2:RunInstances deny for public subnets
     
     ============================================
   EOT

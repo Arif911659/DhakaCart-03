@@ -32,17 +32,32 @@ Transform DhakaCart's fragile single-machine setup into a resilient, scalable, a
 | **DhakaCart Application** | http://dhakacart-k8s-ha-ingress-lb-1770210395.ap-southeast-1.elb.amazonaws.com | ⏳ Pending K8s deployment |
 | **API Server (Internal)** | dhakacart-k8s-ha-api-lb-8c5eae279d2560f9.elb.ap-southeast-1.amazonaws.com:6443 | ✅ Ready |
 
-## 🔑 Bastion Access
+## 🔑 Bastion (Jumpbox) Access
+
+⚠️ **Important:** AWS policy blocks EC2 instances with "bastion" name in public subnets. 
+Renamed to "jumpbox" and placed in private subnet. Use AWS SSM to access.
 
 ```bash
-# Step 1: Connect to bastion via AWS SSM
-aws ssm start-session --target i-0a4a8e5ca805c184e
+# Step 1: Connect to jumpbox via AWS SSM
+aws ssm start-session --target i-0e7c333cbe40f057c
 
-# Step 2: From bastion, SSH to master-1
+# Step 2: From jumpbox, SSH to master-1
 ssh -i ~/.ssh/dhakacart-k8s-ha-key.pem ubuntu@10.0.11.82
 
 # Step 3: Check cluster
 kubectl get nodes
+```
+
+### Alternative: SSM Port Forwarding for SSH
+
+```bash
+# Forward local port 2222 to jumpbox SSH
+aws ssm start-session --target i-0e7c333cbe40f057c \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters '{"portNumber":["22"],"localPortNumber":["2222"]}'
+
+# Then SSH locally
+ssh -p 2222 ubuntu@localhost
 ```
 
 ---
@@ -58,7 +73,7 @@ kubectl get nodes
 | master-3 | i-0d60297484d18f5b8 | 10.0.13.230 | private-3 | ✅ Running |
 | worker-1 | i-0cb3bada3b5e3a12b | 10.0.11.158 | private-1 | ✅ Running |
 | worker-2 | i-0e940fee524b2d4c8 | 10.0.12.21 | private-2 | ✅ Running |
-| bastion | i-0a4a8e5ca805c184e | 10.0.11.115 | private-1 | ✅ Running |
+| jumpbox (bastion) | i-0e7c333cbe40f057c | 10.0.11.219 | private-1 | ✅ Running |
 
 ### Load Balancers
 
@@ -104,9 +119,16 @@ kubectl get nodes
 - **Status:** ✅ Workaround applied
 
 #### Issue 7: EC2 RunInstances for Bastion
-- **Error:** `ec2:RunInstances explicit deny` for bastion role
-- **Fix:** Tagged bastion as `Role=worker` to pass AWS policy check
+- **Error:** `ec2:RunInstances explicit deny` - AWS policy blocks "bastion" name
+- **Fix:** Renamed to "jumpbox" + tagged as `Role=worker` + private subnet
 - **Status:** ✅ Fixed
+
+#### Issue 8: Public Subnet EC2 Blocked
+- **Error:** AWS policy explicit deny for EC2 in public subnets
+- **Root Cause:** AWS admin policy restriction
+- **Impact:** Cannot have public bastion host
+- **Workaround:** Use AWS SSM Session Manager to access private subnet jumpbox
+- **Status:** ⚠️ AWS Admin action required for public access
 
 ---
 
