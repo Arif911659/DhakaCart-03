@@ -57,16 +57,26 @@
 
 ---
 
-## 🚀 সঠিক Deployment Options
+## 🚀 Deployment Options
 
-### Option 1: Local Docker Compose (সবচেয়ে সহজ)
+### Option 1: Docker Hub Images (Fast - No Build)
 
 ```bash
 cd /home/arif/DhakaCart-03
 docker-compose up -d
 
-# Application: http://localhost:3000
-# Backend API: http://localhost:5000/api/products
+# Uses: arifhossaincse22/dhakacart-frontend:v1.0.0
+# Uses: arifhossaincse22/dhakacart-backend:v1.0.0
+```
+
+### Option 2: Local Source Code Build (Development)
+
+```bash
+cd /home/arif/DhakaCart-03
+docker-compose -f docker-compose.local.yml up -d --build
+
+# Builds from: ./frontend/ and ./backend/ folders
+# Hot reload enabled for development
 ```
 
 ### Option 2: Production with Monitoring
@@ -219,6 +229,26 @@ Prometheus:   http://localhost:9090
     "redis": "up"
   }
 }
+```
+
+---
+
+## 🧹 Cleanup Done (28 Nov 2025)
+
+### ✅ Clean State:
+
+- **Containers:** 0 running (all stopped and removed)
+- **Images:** Only Docker Hub images kept
+  - `arifhossaincse22/dhakacart-frontend:v1.0.0`
+  - `arifhossaincse22/dhakacart-backend:v1.0.0`
+- **Volumes:** Unused volumes cleaned
+- **Networks:** Unused networks removed
+
+### 🚀 To Start Project:
+
+```bash
+cd /home/arif/DhakaCart-03
+docker-compose up -d
 ```
 
 ---
