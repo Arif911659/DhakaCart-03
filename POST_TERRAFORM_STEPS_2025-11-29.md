@@ -1,0 +1,802 @@
+# 🚀 Terraform Deployment এর পর - ধাপে ধাপে Guide
+
+**তারিখ:** ২৯ নভেম্বর, ২০২৫   
+**প্রজেক্ট:** DhakaCart E-Commerce Platform  
+**লক্ষ্য:** Terraform deployment এর পর কী করতে হবে - সহজ ভাষায়
+
+---
+
+## 📋 Overview
+
+Terraform দিয়ে AWS infrastructure deploy করার পর, আপনার কাছে **শুধু servers আছে** কিন্তু:
+- ❌ Kubernetes install হয়নি
+- ❌ DhakaCart application deploy হয়নি
+- ❌ Public access configure হয়নি
+
+**এই guide এ:** Terraform এর পরের সব steps সহজ ভাষায় বলা হয়েছে।
+
+---
+
+## 🎯 সহজ ভাষায় বুঝি:
+
+### এখন আপনার কাছে যা আছে (After Terraform):
+
+```
+AWS এ:
+├── 🖥️ 5টি Servers (EC2 instances)
+│   ├── 1টি Bastion (SSH gateway)
+│   ├── 2টি Master nodes (Kubernetes control)
+│   └── 3টি Worker nodes (Application চালাবে)
+│
+├── 🌐 1টি Load Balancer (Public access এর জন্য)
+│
+└── 🔐 Security Groups, VPC, Subnets (Network setup)
+```
+
+**কিন্তু:**
+- Servers এ **Kubernetes install হয়নি**
+- **DhakaCart application deploy হয়নি**
+- **Public URL কাজ করছে না**
+
+### যা করতে হবে:
+
+```
+Phase 2: Kubernetes Install
+  └── Servers এ Kubernetes software install
+
+Phase 3: Application Deploy  
+  └── DhakaCart application Kubernetes এ deploy
+
+Phase 4: Public Access
+  └── Load Balancer configure করে website access
+```
+
+---
+
+## 📊 4টি Phase - সম্পূর্ণ Process
+
+### ✅ Phase 1: Infrastructure (Terraform) - COMPLETED
+
+**আপনি যা করেছিলেন:**
+```bash
+cd terraform/simple-k8s
+terraform apply
+```
+
+**ফলাফল:**
+- ✅ 5টি servers create হয়েছে
+- ✅ Network setup হয়েছে
+- ✅ Load Balancer ready হয়েছে
+- ✅ SSH key তৈরি হয়েছে
+
+**Time:** 10-15 মিনিট
+
+---
+
+### ⏳ Phase 2: Kubernetes Installation - NEXT STEP
+
+**কী করবেন:** সব servers এ Kubernetes software install করবেন
+
+**কেন দরকার:**
+- Kubernetes = Application run করার platform
+- এটা ছাড়া DhakaCart deploy করা যাবে না
+
+#### ধাপ ২.১: Bastion Host এ Connect করুন
+
+**কেন Bastion:**
+- Bastion = Gateway/doorway
+- Private servers এ direct access নেই
+- Bastion দিয়ে private servers এ যেতে হবে
+
+**Command:**
+```bash
+# আপনার local computer থেকে
+cd /home/arif/DhakaCart-03/terraform/simple-k8s
+
+# Bastion এ connect করুন
+ssh -i dhakacart-k8s-key.pem ubuntu@47.128.147.39
+```
+
+**✅ Success হলে:** Terminal এ `ubuntu@bastion:~$` দেখাবে
+
+**💡 ব্যাখ্যা:**
+- `ssh` = Secure Shell (remote computer access)
+- `-i dhakacart-k8s-key.pem` = SSH key file
+- `ubuntu@47.128.147.39` = Bastion server IP
+
+#### ধাপ ২.২: SSH Key Copy করুন
+
+**কেন দরকার:**
+- Bastion থেকে private servers এ SSH করতে key লাগবে
+- Key bastion এ copy করতে হবে
+
+**Command (Bastion এ থাকার সময়):**
+```bash
+# Bastion এ, exit করুন (local computer এ ফিরে আসুন)
+exit
+
+# Local computer থেকে key copy করুন
+scp -i terraform/simple-k8s/dhakacart-k8s-key.pem \
+    terraform/simple-k8s/dhakacart-k8s-key.pem \
+    ubuntu@47.128.147.39:~/.ssh/dhakacart-k8s-key.pem
+
+# Key permissions set করুন
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39 \
+    "chmod 400 ~/.ssh/dhakacart-k8s-key.pem"
+```
+
+**💡 ব্যাখ্যা:**
+- `scp` = Secure Copy (file copy করার command)
+- Key bastion এ copy হচ্ছে যাতে bastion থেকে other servers এ যাওয়া যায়
+
+#### ধাপ ২.৩: Connectivity Test করুন
+
+**কেন test:**
+- সব servers reachable আছে কিনা check করতে হবে
+- Ping test = Network connectivity check
+
+**Command (Bastion এ থেকে):**
+```bash
+# Bastion এ connect করুন আবার
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39
+
+# Master-1 check করুন
+ping -c 2 10.0.10.100
+
+# Master-2 check করুন
+ping -c 2 10.0.10.36
+
+# Worker-1 check করুন
+ping -c 2 10.0.10.224
+```
+
+**✅ Expected Output:**
+```
+PING 10.0.10.100 (10.0.10.100) 56(84) bytes of data.
+64 bytes from 10.0.10.100: icmp_seq=1 ttl=64 time=0.2 ms
+64 bytes from 10.0.10.100: icmp_seq=2 ttl=64 time=0.3 ms
+```
+
+**যদি ping কাজ করে, তাহলে network ঠিক আছে! ✅**
+
+#### ধাপ ২.৪: Master-1 এ Kubernetes Install করুন
+
+**কেন Master-1 প্রথমে:**
+- Master-1 = Cluster initialize করবে
+- বাকি nodes Master-1 এর সাথে join করবে
+
+**Commands:**
+```bash
+# Bastion থেকে Master-1 এ SSH করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.100
+
+# এখন আপনি Master-1 এ আছেন
+```
+
+**Kubernetes Install Script:**
+
+Master-1 এ এই commands run করুন:
+
+```bash
+# Step 1: System update
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+
+# Step 2: Swap disable (Kubernetes এর জন্য প্রয়োজনীয়)
+sudo swapoff -a
+sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+# Step 3: Kernel modules load
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# Step 4: Kernel parameters
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+
+sudo sysctl --system
+
+# Step 5: Containerd install (Container runtime)
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y containerd.io
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+# Step 6: Kubernetes tools install
+curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/kubernetes-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet=1.28.0-00 kubeadm=1.28.0-00 kubectl=1.28.0-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# Step 7: Kubernetes cluster initialize
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# Step 8: kubeconfig setup (Important!)
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Step 9: CNI install (Network plugin - Flannel)
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+
+# Step 10: Wait for cluster ready
+sleep 30
+kubectl get nodes
+```
+
+**⏱️ Time:** ৫-১০ মিনিট
+
+**✅ Success হলে:**
+```
+NAME       STATUS   ROLES           AGE   VERSION
+master-1   Ready    control-plane   1m    v1.28.0
+```
+
+**💡 Important:** 
+- Initialize এর শেষে একটা **join command** দেখাবে
+- সেই command save করুন (আগে পরে লাগবে)
+
+#### ধাপ ২.৫: Master-2 Join করুন
+
+**কেন:**
+- High Availability এর জন্য 2টি master প্রয়োজন
+
+**Commands:**
+```bash
+# Master-1 থেকে exit করুন, Bastion এ ফিরে আসুন
+exit
+
+# Bastion থেকে Master-2 এ SSH করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.36
+
+# Master-2 এ Kubernetes install করুন (same commands as Master-1, Step 1-6)
+# তারপর Master-1 এ পাওয়া join command run করুন
+```
+
+**💡 ব্যাখ্যা:**
+- Master-2 Master-1 এর cluster এ join করবে
+- Join command Master-1 এ `kubeadm init` এর পরে দেখাবে
+
+#### ধাপ ২.৬: Worker Nodes Join করুন
+
+**কেন:**
+- Workers = Application চালাবে
+- 3টি worker nodes আছে
+
+**Process (প্রতিটি Worker এ):**
+
+```bash
+# Bastion থেকে Worker-1 এ SSH
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.224
+
+# Kubernetes install (Step 1-6 same as Master-1)
+# তারপর Worker join command run করুন (Master-1 থেকে পাওয়া)
+
+# Worker-2 এবং Worker-3 এ same process
+```
+
+**⏱️ Time:** Worker প্রতি ৫-৭ মিনিট
+
+**✅ Final Check:**
+```bash
+# Master-1 এ থেকে
+kubectl get nodes
+```
+
+**Expected Output:**
+```
+NAME       STATUS   ROLES           AGE   VERSION
+master-1   Ready    control-plane   5m    v1.28.0
+master-2   Ready    control-plane   3m    v1.28.0
+worker-1   Ready    <none>          2m    v1.28.0
+worker-2   Ready    <none>          2m    v1.28.0
+worker-3   Ready    <none>          2m    v1.28.0
+```
+
+**যদি সব "Ready" দেখায়, তাহলে Kubernetes cluster ready! ✅**
+
+---
+
+### ⏳ Phase 3: DhakaCart Application Deployment
+
+**কী করবেন:** DhakaCart application Kubernetes cluster এ deploy করবেন
+
+**কেন দরকার:**
+- Application deploy না করলে website কাজ করবে না
+- Application = Frontend, Backend, Database, Redis
+
+#### ধাপ ৩.১: kubeconfig Local Machine এ Copy করুন
+
+**কেন:**
+- Local machine থেকে Kubernetes cluster access করার জন্য
+
+**Commands:**
+```bash
+# Bastion এ থেকে
+exit
+
+# Local machine থেকে bastion এ kubeconfig copy করুন
+scp -i terraform/simple-k8s/dhakacart-k8s-key.pem \
+    ubuntu@47.128.147.39:~/.kube/config \
+    ~/.kube/config
+
+# Permissions set করুন
+chmod 600 ~/.kube/config
+
+# Test করুন
+kubectl get nodes
+```
+
+**✅ Success হলে:** Local machine থেকে cluster দেখাবে
+
+#### ধাপ ৩.২: Application Files Check করুন
+
+**Files Location:**
+```
+DhakaCart-03/
+└── k8s/
+    ├── namespace.yaml
+    ├── secrets/
+    ├── configmaps/
+    ├── volumes/
+    ├── deployments/
+    ├── services/
+    └── ingress/
+```
+
+**Commands:**
+```bash
+# Project folder এ যান
+cd /home/arif/DhakaCart-03
+
+# Files check করুন
+ls -la k8s/
+ls -la k8s/deployments/
+ls -la k8s/services/
+```
+
+#### ধাপ ৩.৩: Namespace Create করুন
+
+**কেন:**
+- Namespace = Separate area/cluster ভিতর
+- DhakaCart application আলাদা namespace এ থাকবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/namespace.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get namespace dhakacart
+```
+
+#### ধাপ ৩.৪: Secrets Create করুন
+
+**কেন:**
+- Database password এবং sensitive data store করতে হবে
+- Kubernetes secrets = Password store করার safe way
+
+**Command:**
+```bash
+kubectl apply -f k8s/secrets/db-secrets.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get secrets -n dhakacart
+```
+
+**💡 Note:** Password change করতে পারেন (production এ)
+
+#### ধাপ ৩.৫: ConfigMaps Create করুন
+
+**কেন:**
+- Application configuration store করতে হবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/configmaps/
+```
+
+#### ধাপ ৩.৬: Volumes Create করুন
+
+**কেন:**
+- Database data permanently store করার জন্য
+- Volumes = Permanent storage
+
+**Command:**
+```bash
+kubectl apply -f k8s/volumes/pvc.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get pvc -n dhakacart
+```
+
+#### ধাপ ৩.৭: Database Deploy করুন
+
+**কেন:**
+- Database = সব data store করবে
+- প্রথমে database deploy করতে হবে (Backend এ লাগবে)
+
+**Command:**
+```bash
+kubectl apply -f k8s/deployments/postgres-deployment.yaml
+```
+
+**⏱️ Wait:** ১-২ মিনিট
+
+**✅ Verify:**
+```bash
+kubectl get pods -n dhakacart -l app=dhakacart-db
+
+# Expected:
+# NAME                              READY   STATUS    RESTARTS   AGE
+# dhakacart-db-xxxxxxxxxx-xxxxx     1/1     Running   0          1m
+```
+
+**💡 ব্যাখ্যা:**
+- `1/1 Ready` = Pod running এবং ready
+- `Running` = Container successfully started
+
+#### ধাপ ৩.৮: Redis Deploy করুন
+
+**কেন:**
+- Redis = Cache/performance boost করার জন্য
+
+**Command:**
+```bash
+kubectl apply -f k8s/deployments/redis-deployment.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get pods -n dhakacart -l app=dhakacart-redis
+```
+
+#### ধাপ ৩.৯: Backend Deploy করুন
+
+**কেন:**
+- Backend = API server
+- Database এবং Redis এর পরে deploy করতে হবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/deployments/backend-deployment.yaml
+```
+
+**⏱️ Wait:** ১-২ মিনিট
+
+**✅ Verify:**
+```bash
+kubectl get pods -n dhakacart -l app=dhakacart-backend
+```
+
+#### ধাপ ৩.১০: Frontend Deploy করুন
+
+**কেন:**
+- Frontend = Website/User interface
+- সবচেয়ে শেষে deploy করতে হবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/deployments/frontend-deployment.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get pods -n dhakacart -l app=dhakacart-frontend
+```
+
+#### ধাপ ৩.১১: Services Create করুন
+
+**কেন:**
+- Services = Pods এর সাথে connect করার network endpoint
+- Database, Backend, Frontend এর জন্য services লাগবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/services/services.yaml
+```
+
+**✅ Verify:**
+```bash
+kubectl get svc -n dhakacart
+```
+
+**Expected Output:**
+```
+NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)
+dhakacart-db-service        ClusterIP   10.96.x.x       <none>        5432/TCP
+dhakacart-redis-service     ClusterIP   10.96.x.x       <none>        6379/TCP
+dhakacart-backend-service   ClusterIP   10.96.x.x       <none>        5000/TCP
+dhakacart-frontend-service  NodePort    10.96.x.x       <none>        80:30080/TCP
+```
+
+**💡 ব্যাখ্যা:**
+- `ClusterIP` = Internal access only
+- `NodePort` = External access (30080 port)
+
+#### ধাপ ৩.১২: সব Pods Check করুন
+
+**Command:**
+```bash
+kubectl get pods -n dhakacart
+```
+
+**✅ Expected (সব Running):**
+```
+NAME                                 READY   STATUS    RESTARTS   AGE
+dhakacart-db-xxxxx                   1/1     Running   0          5m
+dhakacart-redis-xxxxx                1/1     Running   0          4m
+dhakacart-backend-xxxxx              1/1     Running   0          3m
+dhakacart-frontend-xxxxx             1/1     Running   0          2m
+```
+
+**যদি সব "Running" এবং "1/1 Ready" দেখায়, তাহলে Application deployed! ✅**
+
+---
+
+### ⏳ Phase 4: Public Access Configuration
+
+**কী করবেন:** Load Balancer configure করবেন যাতে Internet থেকে website access করা যায়
+
+#### ধাপ ৪.১: Ingress Controller Install করুন
+
+**কেন:**
+- Ingress Controller = Load Balancer থেকে Pods এ traffic route করবে
+- NGINX Ingress Controller = Popular choice
+
+**Command:**
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/aws/deploy.yaml
+```
+
+**⏱️ Wait:** ২-৩ মিনিট
+
+**✅ Verify:**
+```bash
+kubectl get pods -n ingress-nginx
+```
+
+#### ধাপ ৪.২: Ingress Resource Create করুন
+
+**কেন:**
+- Ingress = Traffic routing rules
+- Load Balancer থেকে Frontend pods এ traffic forward করবে
+
+**Command:**
+```bash
+kubectl apply -f k8s/ingress/
+```
+
+**✅ Verify:**
+```bash
+kubectl get ingress -n dhakacart
+```
+
+#### ধাপ ৪.৩: Load Balancer DNS Get করুন
+
+**Command:**
+```bash
+# Ingress Controller এর Load Balancer DNS
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+
+# বা Terraform output থেকে
+cd terraform/simple-k8s
+terraform output
+```
+
+**Expected DNS:**
+```
+http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
+```
+
+#### ধাপ ৪.৪: Website Test করুন
+
+**Browser এ open করুন:**
+```
+http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
+```
+
+**✅ Success হলে:** DhakaCart website দেখাবে! 🎉
+
+---
+
+## 📝 Complete Command Summary
+
+### Phase 2: Kubernetes Installation
+
+```bash
+# 1. Bastion এ connect
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39
+
+# 2. Master-1 এ SSH
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.100
+
+# 3. Master-1 এ Kubernetes install এবং init
+# (Commands উপরে দেওয়া আছে)
+
+# 4. Master-2 এবং Workers এ join
+# (Join commands Master-1 থেকে পাওয়া)
+```
+
+### Phase 3: Application Deployment
+
+```bash
+# Local machine থেকে
+cd /home/arif/DhakaCart-03
+
+# সব একসাথে deploy
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secrets/
+kubectl apply -f k8s/configmaps/
+kubectl apply -f k8s/volumes/
+kubectl apply -f k8s/deployments/
+kubectl apply -f k8s/services/
+```
+
+### Phase 4: Public Access
+
+```bash
+# Ingress Controller install
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/aws/deploy.yaml
+
+# Ingress create
+kubectl apply -f k8s/ingress/
+```
+
+---
+
+## 🎯 Simple Explanation
+
+### এখন কী হয়েছে (After Terraform):
+
+```
+AWS:
+├── Servers আছে ✅
+├── Network আছে ✅
+└── Load Balancer আছে ✅
+
+কিন্তু:
+├── Servers এ software নেই ❌
+├── Application deploy হয়নি ❌
+└── Website কাজ করছে না ❌
+```
+
+### যা করতে হবে:
+
+**Step 1:** Servers এ Kubernetes install করুন
+- কেন? Application run করার platform লাগবে
+
+**Step 2:** DhakaCart application deploy করুন
+- কেন? Website কাজ করবে
+
+**Step 3:** Public access configure করুন
+- কেন? Internet থেকে access করতে হবে
+
+---
+
+## 📊 Timeline
+
+| Phase | What | Time | Status |
+|-------|------|------|--------|
+| Phase 1 | Terraform Infrastructure | 10-15 min | ✅ Done |
+| Phase 2 | Kubernetes Installation | 30-45 min | ⏳ Next |
+| Phase 3 | Application Deployment | 10-15 min | ⏳ After Phase 2 |
+| Phase 4 | Public Access | 5-10 min | ⏳ After Phase 3 |
+
+**Total Time:** ~১-১.৫ ঘন্টা
+
+---
+
+## 🔍 Troubleshooting
+
+### Problem: SSH Connection Failed
+
+**Solution:**
+```bash
+# Key permissions check
+chmod 400 terraform/simple-k8s/dhakacart-k8s-key.pem
+
+# IP check
+ping 47.128.147.39
+```
+
+### Problem: Kubernetes Install Failed
+
+**Solution:**
+```bash
+# Logs check
+sudo journalctl -u kubelet -f
+
+# Containerd check
+sudo systemctl status containerd
+```
+
+### Problem: Pods Not Starting
+
+**Solution:**
+```bash
+# Pod logs
+kubectl logs <pod-name> -n dhakacart
+
+# Pod describe
+kubectl describe pod <pod-name> -n dhakacart
+```
+
+### Problem: Website Not Loading
+
+**Solution:**
+```bash
+# Services check
+kubectl get svc -n dhakacart
+
+# Ingress check
+kubectl get ingress -n dhakacart
+
+# Load Balancer check
+kubectl get svc -n ingress-nginx
+```
+
+---
+
+## ✅ Final Checklist
+
+### After All Steps:
+
+- [ ] All nodes Ready (`kubectl get nodes`)
+- [ ] All pods Running (`kubectl get pods -n dhakacart`)
+- [ ] Services created (`kubectl get svc -n dhakacart`)
+- [ ] Ingress configured (`kubectl get ingress -n dhakacart`)
+- [ ] Website accessible (Browser test)
+- [ ] Database working (Check logs)
+- [ ] Backend API working (Test endpoint)
+
+---
+
+## 🎉 Success!
+
+যদি সব steps complete হয়ে থাকে:
+
+1. ✅ Infrastructure ready (Terraform)
+2. ✅ Kubernetes cluster ready
+3. ✅ DhakaCart application deployed
+4. ✅ Public access working
+
+**আপনার DhakaCart website এখন Internet থেকে access করা যাবে! 🚀**
+
+---
+
+## 📚 Related Documentation
+
+- **Architecture:** `DEPLOYMENT_ARCHITECTURE(29-11-25).md`
+- **Kubernetes Guide:** `k8s/DEPLOYMENT_GUIDE.md`
+- **Manual Steps:** `terraform/k8s-ha-cluster/MANUAL_STEPS_AWS_DEPLOYMENT_2024-11-24.md`
+
+---
+
+**Created:** ২৪ নভেম্বর, ২০২৪  
+**Last Updated:** ২৪ নভেম্বর, ২০২৪  
+**Status:** Complete Guide ✅
+
+---
+
+**Remember:** 
+- ধীরে ধীরে steps follow করুন
+- Error হলে logs check করুন
+- সব commands copy-paste করে run করুন
+
+**Good Luck! আপনি পারবেন! 💪**
+
