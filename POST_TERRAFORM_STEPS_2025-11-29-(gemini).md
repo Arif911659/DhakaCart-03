@@ -115,6 +115,20 @@ Bastion থেকে **Master-1** (Private IP: 10.0.10.100 উদাহরণস
 ```bash
 # শুধুমাত্র Master-1 এ রান করবেন
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "LOAD_BALANCER_DNS_OR_MASTER_IP:6443" --upload-certs
+
+# sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "dhakacart-k8s-alb-868841931.ap-southeast-1.elb.amazonaws.com:6443" --upload-certs
+
+# sudo kubeadm init --pod-network-cidr=10.244.0.0/16 \
+--control-plane-endpoint "dhakacart-k8s-alb-868841931.ap-southeast-1.elb.amazonaws.com:6443" \
+--upload-certs \
+--ignore-preflight-errors=NumCPU
+
+# sudo kubeadm init --pod-network-cidr=10.244.0.0/16 \
+--upload-certs \
+--ignore-preflight-errors=NumCPU
+
+# kubeadm join 10.0.10.113:6443 --token 9tfam1.v77gfr8gvit6pjfg \
+        --discovery-token-ca-cert-hash sha256:9cc9806d6c7a5658c6104adafea438e9e594006236db049a576cfc00a680ed91
 ```
 
 *(নোট: আপনার যদি লোড ব্যালেন্সার সেট করা না থাকে, `--control-plane-endpoint` ফ্ল্যাগটি বাদ দিন বা Master-1 এর প্রাইভেট আইপি দিন)*
@@ -140,15 +154,96 @@ kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/
 
 ### ধাপ ৪: ওয়ার্কার নোড জয়েন করানো
 
-Master-1 থেকে পাওয়া `kubeadm join` কমান্ডটি নিয়ে **বাকি ৪টি সার্ভারে (Master-2, Worker-1, 2, 3)** রান করুন।
+আপনার Worker নোডটি ক্লাস্টারে যোগ করার জন্য প্রয়োজনীয় সমস্ত ধাপ নিচে দেওয়া হলো। এই প্রক্রিয়াটি Master নোড সেটআপের মতোই, তবে এখানে kubeadm init এর পরিবর্তে kubeadm join কমান্ড ব্যবহার করা হবে।
 
-**উদাহরণ (Worker বা Secondary Master এর জন্য):**
+Worker নোডটি যোগ করার জন্য আপনার যে Join Command টি লাগবে, তা হলো:
 
-```bash
-sudo kubeadm join <MASTER_IP>:6443 --token <TOKEN> --discovery-token-ca-cert-hash sha256:<HASH>
-```
+Bash
 
-*(যদি এটি Master-2 হয়, তবে কমান্ডের শেষে `--control-plane` ফ্ল্যাগ যোগ করতে হবে)*
+sudo kubeadm join 10.0.10.113:6443 --token wy3vbu.wzwwr3uxtic46kmj \
+     --discovery-token-ca-cert-hash sha256:bf5a5561d5d0096a221a4e8ab7a4d63d9ac42285fd7bb96c4b82ab7947fd631c
+🛠️ পর্ব ১: Worker নোডে প্রী-রিকুইজিট সেটআপ
+Worker নোড (যেমন Worker-1) এ SSH করে নিচের ধাপগুলো অনুসরণ করুন।
+
+ধাপ ১: সিস্টেম আপডেট ও প্রয়োজনীয় টুলস ইনস্টল
+Bash
+
+# System update
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+ধাপ ২: Swap Disable ও Kernel মডিউল কনফিগার
+Kubernetes সঠিকভাবে কাজ করার জন্য swap বন্ধ করতে হবে।
+
+Bash
+
+# Swap disable
+sudo swapoff -a
+sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+# Kernel modules load
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# Kernel parameters & apply
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system
+ধাপ ৩: Containerd ইনস্টল এবং Cgroup Fix
+Worker নোডে কন্টেইনার চালানোর জন্য containerd রানটাইম ইনস্টল করুন।
+
+Bash
+
+# Containerd install & Cgroup fix
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y containerd.io
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+# Cgroup fix: SystemdCgroup = true
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+ধাপ ৪: Kubernetes টুলস ইনস্টল (v1.29)
+Master নোডগুলোর সাথে একই সংস্করণ (v1.29) ইনস্টল করুন।
+
+Bash
+
+# Kubernetes tools install (v1.29 এর জন্য নতুন রিপোজিটরি)
+sudo rm /etc/apt/sources.list.d/kubernetes.list 2>/dev/null
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+🚀 পর্ব ২: Worker নোড যোগ করা
+ধাপ ৫: ক্লাস্টারে Worker নোড জয়েন করান
+আপনার উপরে দেওয়া Worker Join Command টি এখন Worker নোডে রান করুন। এতে কোনো --control-plane বা --certificate-key ফ্ল্যাগ থাকবে না।
+
+Bash
+
+# Worker-1 এ রান করুন
+sudo kubeadm join 10.0.10.113:6443 --token wy3vbu.wzwwr3uxtic46kmj \
+     --discovery-token-ca-cert-hash sha256:bf5a5561d5d0096a221a4e8ab7a4d63d9ac42285fd7bb96c4b82ab7947fd631c
+ধাপ ৬: স্থিতি যাচাই করুন
+জয়েন সফল হলে, Master-1 এ ফিরে যান এবং দেখুন Worker নোডটি Ready দেখাচ্ছে কিনা।
+
+Master-1 এ SSH করুন এবং চালান:
+
+Bash
+
+kubectl get nodes
+আউটপুটে আপনার Master-1, Master-2 এবং নতুন Worker নোডটি দেখা যাবে।
+
+NAME         STATUS   ROLES           AGE     VERSION
+master-1     Ready    control-plane   ...     v1.29.15
+master-2     Ready    control-plane   ...     v1.29.15
+worker-1     Ready    <none>          ...     v1.29.15
+এভাবে আপনি সফলভাবে আপনার Worker নোডটি ক্লাস্টারে যোগ করতে পারবেন।
 
 -----
 

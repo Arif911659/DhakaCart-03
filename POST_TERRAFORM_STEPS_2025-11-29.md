@@ -68,6 +68,28 @@ terraform apply
 - ✅ Network setup হয়েছে
 - ✅ Load Balancer ready হয়েছে
 - ✅ SSH key তৈরি হয়েছে
+- ✅ **Output data automatically saved** to `aws_instances_output.txt`
+
+**📄 Output File:**
+Terraform apply এর পর সব output data automatically `terraform/simple-k8s/aws_instances_output.txt` file এ save হয়ে যাবে। এই file এ আপনি পাবেন:
+- Bastion host এর Public IP এবং SSH command
+- Master nodes এর Private IPs এবং SSH commands
+- Worker nodes এর Private IPs এবং SSH commands
+- Load Balancer DNS এবং Public URL
+- VPC এবং Network information
+- সব SSH commands ready-made format এ
+
+**Output File Check করুন:**
+```bash
+# Output file দেখুন
+cat terraform/simple-k8s/aws_instances_output.txt
+
+# বা specific information খুঁজুন
+grep "Public IP" terraform/simple-k8s/aws_instances_output.txt
+grep "Private IP" terraform/simple-k8s/aws_instances_output.txt
+```
+
+**💡 Tip:** এই file থেকে সব IP addresses এবং commands copy করে ব্যবহার করতে পারবেন!
 
 **Time:** 10-15 মিনিট
 
@@ -88,21 +110,34 @@ terraform apply
 - Private servers এ direct access নেই
 - Bastion দিয়ে private servers এ যেতে হবে
 
+**📄 প্রথমে Output File Check করুন:**
+```bash
+# Output file থেকে Bastion IP এবং SSH command দেখুন
+cat terraform/simple-k8s/aws_instances_output.txt | grep -A 5 "BASTION HOST"
+```
+
 **Command:**
 ```bash
 # আপনার local computer থেকে
 cd /home/arif/DhakaCart-03/terraform/simple-k8s
 
-# Bastion এ connect করুন
-ssh -i dhakacart-k8s-key.pem ubuntu@47.128.147.39
+# Output file থেকে Bastion IP নিন (বা direct command use করুন)
+# Example (আপনার actual IP output file এ দেখুন):
+ssh -i dhakacart-k8s-key.pem ubuntu@<BASTION_PUBLIC_IP>
+
+# বা output file থেকে ready-made command copy করুন
+# aws_instances_output.txt file এ "SSH Command:" line এ exact command আছে
 ```
+
+**💡 সহজ উপায়:**
+Output file (`aws_instances_output.txt`) open করুন এবং "BASTION HOST" section থেকে SSH command copy করে run করুন!
 
 **✅ Success হলে:** Terminal এ `ubuntu@bastion:~$` দেখাবে
 
 **💡 ব্যাখ্যা:**
 - `ssh` = Secure Shell (remote computer access)
 - `-i dhakacart-k8s-key.pem` = SSH key file
-- `ubuntu@47.128.147.39` = Bastion server IP
+- Bastion IP = `aws_instances_output.txt` file এ দেখুন
 
 #### ধাপ ২.২: SSH Key Copy করুন
 
@@ -110,20 +145,30 @@ ssh -i dhakacart-k8s-key.pem ubuntu@47.128.147.39
 - Bastion থেকে private servers এ SSH করতে key লাগবে
 - Key bastion এ copy করতে হবে
 
+**📄 Output File থেকে Bastion IP নিন:**
+```bash
+# Output file থেকে Bastion IP check করুন
+grep "Public IP:" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Command (Bastion এ থাকার সময়):**
 ```bash
 # Bastion এ, exit করুন (local computer এ ফিরে আসুন)
 exit
 
 # Local computer থেকে key copy করুন
+# <BASTION_IP> এর জায়গায় output file থেকে IP use করুন
 scp -i terraform/simple-k8s/dhakacart-k8s-key.pem \
     terraform/simple-k8s/dhakacart-k8s-key.pem \
-    ubuntu@47.128.147.39:~/.ssh/dhakacart-k8s-key.pem
+    ubuntu@<BASTION_IP>:~/.ssh/dhakacart-k8s-key.pem
 
 # Key permissions set করুন
-ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39 \
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@<BASTION_IP> \
     "chmod 400 ~/.ssh/dhakacart-k8s-key.pem"
 ```
+
+**💡 সহজ উপায়:**
+Output file এ "NEXT STEPS" section এ step 2 এ exact command আছে - সেটা copy করে use করুন!
 
 **💡 ব্যাখ্যা:**
 - `scp` = Secure Copy (file copy করার command)
@@ -135,26 +180,37 @@ ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39 \
 - সব servers reachable আছে কিনা check করতে হবে
 - Ping test = Network connectivity check
 
+**📄 Output File থেকে IPs নিন:**
+```bash
+# Output file থেকে সব Private IPs দেখুন
+grep "Private IP:" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Command (Bastion এ থেকে):**
 ```bash
 # Bastion এ connect করুন আবার
-ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39
+# Output file থেকে Bastion IP use করুন
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@<BASTION_IP>
 
-# Master-1 check করুন
-ping -c 2 10.0.10.100
+# Output file থেকে Private IPs নিয়ে ping test করুন
+# Master nodes
+ping -c 2 <MASTER_1_PRIVATE_IP>
+ping -c 2 <MASTER_2_PRIVATE_IP>
 
-# Master-2 check করুন
-ping -c 2 10.0.10.36
-
-# Worker-1 check করুন
-ping -c 2 10.0.10.224
+# Worker nodes
+ping -c 2 <WORKER_1_PRIVATE_IP>
+ping -c 2 <WORKER_2_PRIVATE_IP>
+ping -c 2 <WORKER_3_PRIVATE_IP>
 ```
+
+**💡 সহজ উপায়:**
+Output file এ "Master Private IPs:" এবং "Worker Private IPs:" line এ comma-separated IPs আছে - সেগুলো use করুন!
 
 **✅ Expected Output:**
 ```
-PING 10.0.10.100 (10.0.10.100) 56(84) bytes of data.
-64 bytes from 10.0.10.100: icmp_seq=1 ttl=64 time=0.2 ms
-64 bytes from 10.0.10.100: icmp_seq=2 ttl=64 time=0.3 ms
+PING 10.0.10.xxx (10.0.10.xxx) 56(84) bytes of data.
+64 bytes from 10.0.10.xxx: icmp_seq=1 ttl=64 time=0.2 ms
+64 bytes from 10.0.10.xxx: icmp_seq=2 ttl=64 time=0.3 ms
 ```
 
 **যদি ping কাজ করে, তাহলে network ঠিক আছে! ✅**
@@ -165,11 +221,19 @@ PING 10.0.10.100 (10.0.10.100) 56(84) bytes of data.
 - Master-1 = Cluster initialize করবে
 - বাকি nodes Master-1 এর সাথে join করবে
 
+**📄 Output File থেকে Master-1 IP নিন:**
+```bash
+# Output file থেকে Master-1 Private IP দেখুন
+grep -A 4 "Master-1:" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Commands:**
 ```bash
 # Bastion থেকে Master-1 এ SSH করুন
-ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.100
+# Output file থেকে Master-1 Private IP use করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<MASTER_1_PRIVATE_IP>
 
+# বা output file এ "Master-1:" section এ ready-made SSH command আছে
 # এখন আপনি Master-1 এ আছেন
 ```
 
@@ -218,7 +282,13 @@ sudo apt-get install -y kubelet=1.28.0-00 kubeadm=1.28.0-00 kubectl=1.28.0-00
 sudo apt-mark hold kubelet kubeadm kubectl
 
 # Step 7: Kubernetes cluster initialize
+# ⚠️ Important: Use Master-1's private IP, NOT ALB DNS
+# ALB doesn't support TCP on port 6443 (only HTTP/HTTPS)
+# Get Master-1 private IP from output file
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# Alternative: If you need HA setup later, use Master-1 private IP as control-plane-endpoint
+# sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "<MASTER_1_PRIVATE_IP>:6443"
 
 # Step 8: kubeconfig setup (Important!)
 mkdir -p $HOME/.kube
@@ -244,11 +314,19 @@ master-1   Ready    control-plane   1m    v1.28.0
 **💡 Important:** 
 - Initialize এর শেষে একটা **join command** দেখাবে
 - সেই command save করুন (আগে পরে লাগবে)
+- ⚠️ **ALB DNS ব্যবহার করবেন না** `kubeadm init` এ - ALB TCP support করে না, শুধু HTTP/HTTPS
+- Master-1 এর private IP use করুন (output file এ আছে)
 
 #### ধাপ ২.৫: Master-2 Join করুন
 
 **কেন:**
 - High Availability এর জন্য 2টি master প্রয়োজন
+
+**📄 Output File থেকে Master-2 IP নিন:**
+```bash
+# Output file থেকে Master-2 Private IP দেখুন
+grep -A 4 "Master-2:" terraform/simple-k8s/aws_instances_output.txt
+```
 
 **Commands:**
 ```bash
@@ -256,7 +334,8 @@ master-1   Ready    control-plane   1m    v1.28.0
 exit
 
 # Bastion থেকে Master-2 এ SSH করুন
-ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.36
+# Output file থেকে Master-2 Private IP use করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<MASTER_2_PRIVATE_IP>
 
 # Master-2 এ Kubernetes install করুন (same commands as Master-1, Step 1-6)
 # তারপর Master-1 এ পাওয়া join command run করুন
@@ -272,16 +351,24 @@ ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.36
 - Workers = Application চালাবে
 - 3টি worker nodes আছে
 
+**📄 Output File থেকে Worker IPs নিন:**
+```bash
+# Output file থেকে সব Worker Private IPs দেখুন
+grep -A 4 "Worker-" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Process (প্রতিটি Worker এ):**
 
 ```bash
 # Bastion থেকে Worker-1 এ SSH
-ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.224
+# Output file থেকে Worker-1 Private IP use করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<WORKER_1_PRIVATE_IP>
 
 # Kubernetes install (Step 1-6 same as Master-1)
 # তারপর Worker join command run করুন (Master-1 থেকে পাওয়া)
 
 # Worker-2 এবং Worker-3 এ same process
+# Output file থেকে respective IPs use করুন
 ```
 
 **⏱️ Time:** Worker প্রতি ৫-৭ মিনিট
@@ -319,14 +406,21 @@ worker-3   Ready    <none>          2m    v1.28.0
 **কেন:**
 - Local machine থেকে Kubernetes cluster access করার জন্য
 
+**📄 Output File থেকে Bastion IP নিন:**
+```bash
+# Output file থেকে Bastion Public IP দেখুন
+grep "Public IP:" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Commands:**
 ```bash
 # Bastion এ থেকে
 exit
 
 # Local machine থেকে bastion এ kubeconfig copy করুন
+# Output file থেকে Bastion IP use করুন
 scp -i terraform/simple-k8s/dhakacart-k8s-key.pem \
-    ubuntu@47.128.147.39:~/.kube/config \
+    ubuntu@<BASTION_IP>:~/.kube/config \
     ~/.kube/config
 
 # Permissions set করুন
@@ -588,27 +682,42 @@ kubectl get ingress -n dhakacart
 
 #### ধাপ ৪.৩: Load Balancer DNS Get করুন
 
-**Command:**
+**📄 Output File থেকে DNS নিন (সবচেয়ে সহজ!):**
 ```bash
-# Ingress Controller এর Load Balancer DNS
+# Output file থেকে Load Balancer DNS দেখুন
+grep "DNS Name:" terraform/simple-k8s/aws_instances_output.txt
+grep "Public URL:" terraform/simple-k8s/aws_instances_output.txt
+```
+
+**Command (Alternative methods):**
+```bash
+# Method 1: Output file থেকে (Recommended)
+cat terraform/simple-k8s/aws_instances_output.txt | grep "Public URL:"
+
+# Method 2: Ingress Controller এর Load Balancer DNS
 kubectl get svc -n ingress-nginx ingress-nginx-controller
 
-# বা Terraform output থেকে
+# Method 3: Terraform output থেকে
 cd terraform/simple-k8s
-terraform output
+terraform output load_balancer_url
 ```
 
-**Expected DNS:**
-```
-http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
-```
+**💡 সহজ উপায়:**
+Output file (`aws_instances_output.txt`) open করুন এবং "LOAD BALANCER" section এ "Public URL:" line এ exact URL আছে - সেটা copy করে browser এ open করুন!
 
 #### ধাপ ৪.৪: Website Test করুন
 
+**📄 Output File থেকে URL নিন:**
+```bash
+# Output file থেকে Public URL copy করুন
+grep "Public URL:" terraform/simple-k8s/aws_instances_output.txt
+```
+
 **Browser এ open করুন:**
-```
-http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
-```
+Output file (`aws_instances_output.txt`) এ "LOAD BALANCER" section এ "Public URL:" line এ যে URL আছে, সেটা browser এ open করুন।
+
+**💡 সহজ উপায়:**
+Output file open করুন → "Public URL:" line copy করুন → Browser এ paste করুন!
 
 **✅ Success হলে:** DhakaCart website দেখাবে! 🎉
 
@@ -618,17 +727,26 @@ http://dhakacart-k8s-alb-1192201581.ap-southeast-1.elb.amazonaws.com
 
 ### Phase 2: Kubernetes Installation
 
+**📄 প্রথমে Output File Check করুন:**
+```bash
+# সব IPs এবং commands output file এ আছে
+cat terraform/simple-k8s/aws_instances_output.txt
+```
+
 ```bash
 # 1. Bastion এ connect
-ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@47.128.147.39
+# Output file থেকে Bastion IP এবং SSH command নিন
+ssh -i terraform/simple-k8s/dhakacart-k8s-key.pem ubuntu@<BASTION_IP>
 
 # 2. Master-1 এ SSH
-ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@10.0.10.100
+# Output file থেকে Master-1 Private IP use করুন
+ssh -i ~/.ssh/dhakacart-k8s-key.pem ubuntu@<MASTER_1_PRIVATE_IP>
 
 # 3. Master-1 এ Kubernetes install এবং init
 # (Commands উপরে দেওয়া আছে)
 
 # 4. Master-2 এবং Workers এ join
+# Output file থেকে respective IPs use করুন
 # (Join commands Master-1 থেকে পাওয়া)
 ```
 
@@ -701,6 +819,40 @@ AWS:
 
 ---
 
+## 🔒 Security Groups Configuration
+
+### Required Ports for Kubernetes
+
+Terraform automatically configures security groups, but here's what should be open:
+
+**Master/Worker Nodes Security Group (`k8s-nodes-sg`):**
+- **Port 22 (SSH):** From Bastion security group
+- **Port 6443 (Kubernetes API Server):** From ALB security group
+- **Port 10250 (Kubelet API):** From k8s nodes (self)
+- **Port 30000-32767 (NodePort):** From ALB security group
+- **All ports (0-65535):** Between k8s nodes (self) - for Kubernetes internal communication
+
+**ALB Security Group (`alb-sg`):**
+- **Port 80 (HTTP):** From anywhere (0.0.0.0/0)
+- **Port 443 (HTTPS):** From anywhere (0.0.0.0/0)
+- **Outbound:** All traffic allowed
+
+**Bastion Security Group (`bastion-sg`):**
+- **Port 22 (SSH):** From anywhere (0.0.0.0/0)
+- **Outbound:** All traffic allowed
+
+**✅ Verification:**
+```bash
+# AWS Console এ check করুন:
+# EC2 → Security Groups → k8s-nodes-sg
+# Inbound rules এ দেখুন:
+# - Port 6443 from alb-sg
+# - Port 10250 from self
+# - Port 22 from bastion-sg
+```
+
+---
+
 ## 🔍 Troubleshooting
 
 ### Problem: SSH Connection Failed
@@ -714,15 +866,128 @@ chmod 400 terraform/simple-k8s/dhakacart-k8s-key.pem
 ping 47.128.147.39
 ```
 
-### Problem: Kubernetes Install Failed
+### Problem: Kubernetes Install Failed / kubeadm init Timeout
 
-**Solution:**
+**Error Message:**
+```
+timed out waiting for the condition
+error execution phase wait-control-plane: couldn't initialize a Kubernetes cluster
+```
+
+**সমাধান (Step by Step):**
+
+**1. Security Groups Check করুন:**
+Terraform automatically security groups configure করে, কিন্তু verify করুন:
 ```bash
-# Logs check
-sudo journalctl -u kubelet -f
+# AWS Console এ যান → EC2 → Security Groups
+# Check করুন যে k8s-nodes security group এ আছে:
+# - Port 6443 from ALB security group
+# - Port 10250 from k8s nodes (self)
+# - Port 22 from bastion
+```
 
-# Containerd check
+**2. Kubelet Status Check করুন:**
+```bash
+# Master-1 এ থেকে
+sudo systemctl status kubelet
+
+# যদি stopped থাকে, start করুন:
+sudo systemctl start kubelet
+sudo systemctl enable kubelet
+```
+
+**3. Containerd Status Check করুন:**
+```bash
+# Containerd running আছে কিনা check করুন
 sudo systemctl status containerd
+
+# যদি stopped থাকে:
+sudo systemctl start containerd
+sudo systemctl enable containerd
+```
+
+**4. Kubelet Logs Check করুন:**
+```bash
+# Detailed logs দেখুন
+sudo journalctl -xeu kubelet --no-pager | tail -50
+
+# Real-time logs
+sudo journalctl -xeu kubelet -f
+```
+
+**5. Container Runtime Check করুন:**
+```bash
+# Running containers check করুন
+sudo crictl --runtime-endpoint unix:///var/run/containerd/containerd.sock ps -a
+
+# Kubernetes containers check করুন
+sudo crictl --runtime-endpoint unix:///var/run/containerd/containerd.sock ps -a | grep kube | grep -v pause
+
+# যদি কোনো container failed থাকে, logs দেখুন:
+sudo crictl --runtime-endpoint unix:///var/run/containerd/containerd.sock logs <CONTAINER_ID>
+```
+
+**6. Cgroup Issues Check করুন:**
+```bash
+# Cgroup v2 check করুন
+mount | grep cgroup
+
+# যদি cgroup v2 থাকে, disable করুন (temporary):
+sudo sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=0"/' /etc/default/grub
+sudo update-grub
+sudo reboot
+```
+
+**7. Swap Check করুন:**
+```bash
+# Swap disable আছে কিনা check করুন
+free -h
+sudo swapoff -a
+sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+```
+
+**8. Network Configuration Check করুন:**
+```bash
+# Kernel parameters check করুন
+cat /etc/sysctl.d/k8s.conf
+
+# যদি নেই, create করুন:
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system
+```
+
+**9. Reset এবং Retry করুন:**
+```bash
+# যদি সব check করার পরেও কাজ না করে, reset করুন:
+sudo kubeadm reset -f
+sudo rm -rf /etc/cni/net.d
+sudo rm -rf /var/lib/etcd
+sudo rm -rf /etc/kubernetes
+
+# তারপর আবার init করুন (ALB DNS ব্যবহার করবেন না):
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+```
+
+**10. ALB DNS ব্যবহার করবেন না:**
+⚠️ **Important:** `kubeadm init` এ ALB DNS ব্যবহার করবেন না কারণ:
+- ALB (Application Load Balancer) শুধু HTTP/HTTPS support করে
+- Kubernetes API Server (port 6443) TCP protocol ব্যবহার করে
+- ALB TCP traffic handle করতে পারে না
+
+**সঠিক Command:**
+```bash
+# ❌ Wrong (ALB DNS ব্যবহার করবেন না):
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "dhakacart-k8s-alb-xxx.elb.amazonaws.com:6443"
+
+# ✅ Correct (Private IP ব্যবহার করুন):
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# বা HA setup এর জন্য Master-1 private IP:
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint "<MASTER_1_PRIVATE_IP>:6443"
 ```
 
 ### Problem: Pods Not Starting
@@ -779,16 +1044,51 @@ kubectl get svc -n ingress-nginx
 
 ---
 
+## 📄 Output File Reference
+
+### `terraform/simple-k8s/aws_instances_output.txt`
+
+Terraform apply এর পর এই file automatically create হবে এবং সব important information store করবে:
+
+**এই file এ যা পাবেন:**
+- ✅ Bastion host এর Public IP এবং SSH command
+- ✅ Master nodes এর Private IPs, Instance IDs, SSH commands
+- ✅ Worker nodes এর Private IPs, Instance IDs, SSH commands
+- ✅ Load Balancer DNS name এবং Public URL
+- ✅ VPC এবং Network information
+- ✅ SSH key path এবং key name
+- ✅ Cluster information (name, region, counts)
+- ✅ Ready-made SSH commands সব steps এর জন্য
+
+**কীভাবে use করবেন:**
+```bash
+# সম্পূর্ণ file দেখুন
+cat terraform/simple-k8s/aws_instances_output.txt
+
+# Specific information খুঁজুন
+grep "Public IP" terraform/simple-k8s/aws_instances_output.txt
+grep "Private IP" terraform/simple-k8s/aws_instances_output.txt
+grep "Public URL" terraform/simple-k8s/aws_instances_output.txt
+
+# Copy-paste ready commands
+# File এ "SSH Command:" এবং "NEXT STEPS" section এ সব commands ready আছে
+```
+
+**💡 Tip:** এই file থেকে সব IPs এবং commands copy করে directly use করতে পারবেন - manual typing এর দরকার নেই!
+
+---
+
 ## 📚 Related Documentation
 
 - **Architecture:** `DEPLOYMENT_ARCHITECTURE(29-11-25).md`
 - **Kubernetes Guide:** `k8s/DEPLOYMENT_GUIDE.md`
 - **Manual Steps:** `terraform/k8s-ha-cluster/MANUAL_STEPS_AWS_DEPLOYMENT_2024-11-24.md`
+- **Output File:** `terraform/simple-k8s/aws_instances_output.txt` (Auto-generated)
 
 ---
 
 **Created:** ২৪ নভেম্বর, ২০২৪  
-**Last Updated:** ২৪ নভেম্বর, ২০২৪  
+**Last Updated:** ২৯ নভেম্বর, ২০২৫  
 **Status:** Complete Guide ✅
 
 ---

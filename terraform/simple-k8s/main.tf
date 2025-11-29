@@ -8,6 +8,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -231,6 +239,24 @@ resource "aws_security_group" "k8s_nodes" {
     description     = "ICMP ping from bastion"
   }
 
+  # Kubernetes API Server (6443) from ALB
+  ingress {
+    from_port       = 6443
+    to_port         = 6443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "Kubernetes API Server from ALB"
+  }
+
+  # Kubelet API (10250) from k8s nodes
+  ingress {
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    self        = true
+    description = "Kubelet API from k8s nodes"
+  }
+
   # NodePort range from Load Balancer (30000-32767)
   ingress {
     from_port       = 30000
@@ -240,7 +266,7 @@ resource "aws_security_group" "k8s_nodes" {
     description     = "NodePort from ALB"
   }
 
-  # All traffic between k8s nodes
+  # All traffic between k8s nodes (for other Kubernetes ports)
   ingress {
     from_port   = 0
     to_port     = 0

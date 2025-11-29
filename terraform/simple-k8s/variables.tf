@@ -13,19 +13,19 @@ variable "cluster_name" {
 variable "bastion_instance_type" {
   description = "EC2 instance type for bastion"
   type        = string
-  default     = "t2.micro"
+  default     = "t3.medium"
 }
 
 variable "master_instance_type" {
   description = "EC2 instance type for master nodes"
   type        = string
-  default     = "t2.medium"
+  default     = "t3.medium"
 }
 
 variable "worker_instance_type" {
   description = "EC2 instance type for worker nodes"
   type        = string
-  default     = "t2.medium"
+  default     = "t3.medium"
 }
 
 variable "master_count" {

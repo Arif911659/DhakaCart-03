@@ -87,3 +87,95 @@ output "private_key_path" {
   value       = "./${var.cluster_name}-key.pem"
 }
 
+# ============================================
+# Output File for AWS Instances
+# ============================================
+
+resource "local_file" "aws_instances_output" {
+  filename = "${path.module}/aws_instances_output.txt"
+  content = <<-EOT
+=============================================
+AWS Instances Output Information
+Generated: ${timestamp()}
+=============================================
+
+BASTION HOST
+=============================================
+Public IP: ${aws_instance.bastion.public_ip}
+SSH Command: ssh -i ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}
+Instance ID: ${aws_instance.bastion.id}
+Instance Type: ${aws_instance.bastion.instance_type}
+
+MASTER NODES
+=============================================
+${join("\n", [
+  for i, master in aws_instance.masters : 
+  "Master-${i + 1}:\n  Private IP: ${master.private_ip}\n  Instance ID: ${master.id}\n  Instance Type: ${master.instance_type}\n  SSH Command: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${master.private_ip}"
+])}
+
+Master Private IPs: ${join(", ", aws_instance.masters[*].private_ip)}
+
+WORKER NODES
+=============================================
+${join("\n", [
+  for i, worker in aws_instance.workers : 
+  "Worker-${i + 1}:\n  Private IP: ${worker.private_ip}\n  Instance ID: ${worker.id}\n  Instance Type: ${worker.instance_type}\n  SSH Command: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${worker.private_ip}"
+])}
+
+Worker Private IPs: ${join(", ", aws_instance.workers[*].private_ip)}
+
+LOAD BALANCER
+=============================================
+DNS Name: ${aws_lb.app.dns_name}
+Public URL: http://${aws_lb.app.dns_name}
+Load Balancer ARN: ${aws_lb.app.arn}
+
+NETWORKING
+=============================================
+VPC ID: ${aws_vpc.main.id}
+VPC CIDR: ${aws_vpc.main.cidr_block}
+
+SSH KEY
+=============================================
+Private Key Path: ./${var.cluster_name}-key.pem
+Key Name: ${aws_key_pair.k8s_key.key_name}
+
+CLUSTER INFORMATION
+=============================================
+Cluster Name: ${var.cluster_name}
+AWS Region: ${var.aws_region}
+Master Count: ${var.master_count}
+Worker Count: ${var.worker_count}
+
+NEXT STEPS
+=============================================
+1. SSH to Bastion:
+   ssh -i ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}
+
+2. Copy SSH key to bastion:
+   scp -i ${var.cluster_name}-key.pem ${var.cluster_name}-key.pem ubuntu@${aws_instance.bastion.public_ip}:~/.ssh/
+
+3. From bastion, SSH to nodes:
+${join("\n", [
+  for i, master in aws_instance.masters : 
+  "   Master-${i + 1}: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${master.private_ip}"
+])}
+${join("\n", [
+  for i, worker in aws_instance.workers : 
+  "   Worker-${i + 1}: ssh -i ~/.ssh/${var.cluster_name}-key.pem ubuntu@${worker.private_ip}"
+])}
+
+4. Access Application (after K8s setup):
+   http://${aws_lb.app.dns_name}
+
+=============================================
+EOT
+
+  depends_on = [
+    aws_instance.bastion,
+    aws_instance.masters,
+    aws_instance.workers,
+    aws_lb.app
+  ]
+}
+
