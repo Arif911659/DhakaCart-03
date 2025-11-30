@@ -44,12 +44,13 @@ metadata:
   labels:
     app: dhakacart-backend
 spec:
-  type: ClusterIP
+  type: NodePort  # Changed to NodePort for Load Balancer access
   selector:
     app: dhakacart-backend
   ports:
   - port: 5000
     targetPort: 5000
+    nodePort: 30081  # Fixed NodePort for backend API
     protocol: TCP
     name: http
   sessionAffinity: ClientIP  # Sticky sessions if needed
@@ -63,11 +64,12 @@ metadata:
   labels:
     app: dhakacart-frontend
 spec:
-  type: ClusterIP
+  type: NodePort  # Changed to NodePort for Load Balancer access
   selector:
     app: dhakacart-frontend
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 3000
+    nodePort: 30080  # Fixed NodePort (range: 30000-32767)
     protocol: TCP
     name: http

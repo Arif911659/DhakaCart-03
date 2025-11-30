@@ -43,6 +43,7 @@ sudo apt-get update
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
-# Worker-1 এ রান করুন
-sudo kubeadm join 10.0.10.113:6443 --token wy3vbu.wzwwr3uxtic46kmj \
-     --discovery-token-ca-cert-hash sha256:bf5a5561d5d0096a221a4e8ab7a4d63d9ac42285fd7bb96c4b82ab7947fd631c
+# Workers-node এ রান করুন
+kubeadm join 10.0.10.253:6443 --token zw77v6.yz7w07v2i9ucoupt \
+        --discovery-token-ca-cert-hash sha256:eb41d510e2fb8b7b8b3b5fa88270312ee8279bfbc48d55eda6f6703298b16d70
+

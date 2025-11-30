@@ -14,7 +14,7 @@ data:
   REDIS_PORT: "6379"
   
   # Frontend configuration
-  # Using Load Balancer URL for backend API access (browser can access this)
-  # IMPORTANT: Update this URL when Load Balancer changes in LAB practice
-  # Use: ./update-configmap-with-lb.sh YOUR_LB_URL
-  REACT_APP_API_URL: "http://dhakacart-k8s-alb-1098869932.ap-southeast-1.elb.amazonaws.com/api"
+  # LOAD_BALANCER_URL will be replaced dynamically during deployment
+  # Example: http://dhakacart-k8s-alb-1098869932.ap-southeast-1.elb.amazonaws.com
+  REACT_APP_API_URL: "http://LOAD_BALANCER_URL/api"
+

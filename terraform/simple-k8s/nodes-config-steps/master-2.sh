@@ -45,11 +45,11 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
 # Join Master-2 to existing Control Plane
-sudo kubeadm join 10.0.10.113:6443 \
-  --token wy3vbu.wzwwr3uxtic46kmj \
-  --discovery-token-ca-cert-hash sha256:bf5a5561d5d0096a221a4e8ab7a4d63d9ac42285fd7bb96c4b82ab7947fd631c \
+sudo kubeadm join 10.0.10.253:6443 \
+  --token zw77v6.yz7w07v2i9ucoupt \
+  --discovery-token-ca-cert-hash sha256:eb41d510e2fb8b7b8b3b5fa88270312ee8279bfbc48d55eda6f6703298b16d70 \
   --control-plane \
-  --certificate-key c72e6c4ae69ef70fb148dee167a92fede7476d3e165a10384586310a0aec535e
+  --certificate-key 423734cf7ebb706203a26a03114a4fb4bb1bf58718439c50eb8683784fec7697
 
 # Configure kubectl for the user
 mkdir -p $HOME/.kube

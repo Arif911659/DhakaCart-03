@@ -28,7 +28,7 @@ spec:
           service:
             name: dhakacart-frontend-service
             port:
-              number: 3000
+              number: 80
   # Frontend (www)
   - host: www.dhakacart.com
     http:
@@ -39,7 +39,7 @@ spec:
           service:
             name: dhakacart-frontend-service
             port:
-              number: 3000
+              number: 80
   # Backend API
   - host: api.dhakacart.com
     http:

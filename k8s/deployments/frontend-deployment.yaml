@@ -28,7 +28,7 @@ spec:
         image: arifhossaincse22/dhakacart-frontend:v1.0.1
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 80
+        - containerPort: 3000
           name: http
         env:
         - name: REACT_APP_API_URL
@@ -46,7 +46,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 60
           periodSeconds: 10
           timeoutSeconds: 5
@@ -54,7 +54,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 3000
           initialDelaySeconds: 30
           periodSeconds: 5
           timeoutSeconds: 3

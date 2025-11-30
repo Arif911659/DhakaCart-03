@@ -1,6 +1,6 @@
 # Master-1 (Control Plane) Full Configuration Guide
 
-## Step-by-Step Configuration (Same style as workers.md)
+## Step-by-Step Configuration 
 
 # System update
 sudo apt-get update
@@ -44,7 +44,7 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
 # Initialize Master-1
-MASTER_1_IP="10.0.10.113"
+MASTER_1_IP="10.0.10.253"
 sudo kubeadm init \
   --pod-network-cidr=10.244.0.0/16 \
   --control-plane-endpoint "${MASTER_1_IP}:6443" \
