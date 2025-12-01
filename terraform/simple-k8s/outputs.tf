@@ -44,6 +44,16 @@ output "load_balancer_dns" {
   value       = aws_lb.app.dns_name
 }
 
+output "frontend_target_group_arn" {
+  description = "Frontend Target Group ARN"
+  value       = aws_lb_target_group.app.arn
+}
+
+output "backend_target_group_arn" {
+  description = "Backend Target Group ARN"
+  value       = aws_lb_target_group.backend.arn
+}
+
 output "next_steps" {
   description = "Next steps after deployment"
   value = <<-EOT
