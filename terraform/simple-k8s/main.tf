@@ -421,12 +421,21 @@ resource "aws_lb" "app" {
   }
 }
 
-# Target Group (for Kubernetes NodePort)
+# Target Group (for Kubernetes NodePort - Frontend)
 resource "aws_lb_target_group" "app" {
   name     = "${var.cluster_name}-tg"
-  port     = 30080  # Kubernetes NodePort for Ingress
+  port     = 30080  # Kubernetes NodePort for Frontend
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
+
+  # Enable WebSocket support
+  stickiness {
+    enabled = false
+    type    = "lb_cookie"
+  }
+
+  # Enable connection draining
+  deregistration_delay = 30
 
   health_check {
     enabled             = true
@@ -434,7 +443,7 @@ resource "aws_lb_target_group" "app" {
     unhealthy_threshold = 2
     timeout             = 5
     interval            = 30
-    path                = "/healthz"
+    path                = "/"
     port                = "30080"
     protocol            = "HTTP"
     matcher             = "200-399"
@@ -454,15 +463,17 @@ resource "aws_lb_target_group_attachment" "workers" {
   port             = 30080
 }
 
-# HTTP Listener
+# HTTP Listener (Port 80) - Frontend
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = "80"
   protocol          = "HTTP"
 
+  # Frontend routes
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
 }
+
 

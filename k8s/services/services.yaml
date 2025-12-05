@@ -69,7 +69,7 @@ spec:
     app: dhakacart-frontend
   ports:
   - port: 80
-    targetPort: 3000
+    targetPort: 80  # Nginx runs on port 80 in production (not React dev server port 3000)
     nodePort: 30080  # Fixed NodePort (range: 30000-32767)
     protocol: TCP
     name: http

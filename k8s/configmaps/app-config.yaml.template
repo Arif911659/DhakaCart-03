@@ -15,6 +15,6 @@ data:
   
   # Frontend configuration
   # LOAD_BALANCER_URL will be replaced dynamically during deployment
-  # Example: http://dhakacart-k8s-alb-1098869932.ap-southeast-1.elb.amazonaws.com
+  # Example: http://dhakacart-k8s-alb-329362090.ap-southeast-1.elb.amazonaws.com
   REACT_APP_API_URL: "http://LOAD_BALANCER_URL/api"
 
